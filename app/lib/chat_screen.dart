@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
 import 'camera_screen.dart';
+import 'services/openai_service.dart';
 
 class ChatScreen extends StatefulWidget {
   const ChatScreen({super.key});
@@ -30,6 +31,8 @@ class _ChatScreenState extends State<ChatScreen> {
   final TextEditingController _messageController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   final ImagePicker _picker = ImagePicker();
+  final OpenAIService _openAIService = OpenAIService();
+  bool _isLoading = false;
   final List<ChatMessage> _messages = [
     ChatMessage(
       sender: 'ia',
@@ -63,33 +66,56 @@ class _ChatScreenState extends State<ChatScreen> {
 
   void _sendMessage() {
     final text = _messageController.text.trim();
-    if (text.isEmpty) return;
+    if (text.isEmpty || _isLoading) return;
 
     _messageController.clear();
     _addMessage(ChatMessage(sender: 'user', type: 'text', text: text));
     _sendAIResponse(text);
   }
 
-  void _sendAIResponse(String userText) {
-    final response = _buildAIResponse(userText);
-    Future.delayed(const Duration(milliseconds: 300), () {
-      if (!mounted) return;
-      _addMessage(ChatMessage(sender: 'ia', type: 'text', text: response));
+  Future<void> _sendAIResponse(String userText, {String? imagePath}) async {
+    setState(() {
+      _isLoading = true;
     });
-  }
 
-  String _buildAIResponse(String userText) {
-    final lower = userText.toLowerCase();
-    if (lower.contains('hola') || lower.contains('buenos')) {
-      return '¡Hola! Cuéntame qué necesitas y te ayudo con gusto.';
+    _addMessage(ChatMessage(sender: 'ia', type: 'text', text: 'Escribiendo...'));
+
+    try {
+      final response = await _openAIService.getChatResponse(userText, imagePath: imagePath);
+      if (!mounted) return;
+      setState(() {
+        final lastIndex = _messages.lastIndexWhere((m) => m.sender == 'ia' && m.text == 'Escribiendo...');
+        if (lastIndex != -1) {
+          _messages[lastIndex] = ChatMessage(sender: 'ia', type: 'text', text: response);
+        } else {
+          _addMessage(ChatMessage(sender: 'ia', type: 'text', text: response));
+        }
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        final lastIndex = _messages.lastIndexWhere((m) => m.sender == 'ia' && m.text == 'Escribiendo...');
+        if (lastIndex != -1) {
+          _messages[lastIndex] = ChatMessage(
+            sender: 'ia',
+            type: 'text',
+            text: 'Ocurrió un error al conectar con la IA. Revisa tu clave de OpenAI y tu conexión a internet.',
+          );
+        } else {
+          _addMessage(ChatMessage(
+            sender: 'ia',
+            type: 'text',
+            text: 'Ocurrió un error al conectar con la IA. Revisa tu clave de OpenAI y tu conexión a internet.',
+          ));
+        }
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
-    if (lower.contains('imagen') || lower.contains('foto') || lower.contains('cámara')) {
-      return 'Puedes usar el ícono de cámara para tomar una foto o el clip para subir una imagen desde tu dispositivo.';
-    }
-    if (lower.contains('archivo') || lower.contains('subir')) {
-      return 'Selecciona el clip para elegir una imagen desde el dispositivo o usa la cámara para tomar una nueva foto.';
-    }
-    return 'Gracias por escribirme. Estoy analizando tu mensaje y te respondo en seguida.';
   }
 
   Future<void> _showAttachmentOptions() async {
@@ -149,7 +175,7 @@ class _ChatScreenState extends State<ChatScreen> {
         text: 'Imagen adjuntada',
         imagePath: pickedFile.path,
       ));
-      _sendAIResponse('Aquí tienes una imagen.');
+      _sendAIResponse('Aquí tienes una imagen que adjunté. ¿Qué opinas?', imagePath: pickedFile.path);
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -169,7 +195,7 @@ class _ChatScreenState extends State<ChatScreen> {
       text: 'Foto tomada con la cámara',
       imagePath: imagePath,
     ));
-    _sendAIResponse('Perfecto, ya tengo la foto. ¿Quieres que te ayude con algo más?');
+    _sendAIResponse('Aquí tienes una foto que tomé con la cámara. ¿Qué te parece?', imagePath: imagePath);
   }
 
   Widget _buildMessage(ChatMessage message) {
@@ -239,6 +265,7 @@ class _ChatScreenState extends State<ChatScreen> {
               },
             ),
           ),
+          if (_isLoading) const LinearProgressIndicator(minHeight: 3),
           const Divider(height: 1),
           Container(
             color: Colors.white,
@@ -247,13 +274,14 @@ class _ChatScreenState extends State<ChatScreen> {
               children: [
                 IconButton(
                   icon: const Icon(Icons.attach_file, color: Colors.redAccent),
-                  onPressed: _showAttachmentOptions,
+                  onPressed: _isLoading ? null : _showAttachmentOptions,
                 ),
                 Expanded(
                   child: TextField(
                     controller: _messageController,
                     textInputAction: TextInputAction.send,
                     onSubmitted: (_) => _sendMessage(),
+                    enabled: !_isLoading,
                     decoration: const InputDecoration(
                       hintText: 'Escribe un mensaje...',
                       border: OutlineInputBorder(
@@ -266,10 +294,19 @@ class _ChatScreenState extends State<ChatScreen> {
                 const SizedBox(width: 8),
                 CircleAvatar(
                   radius: 24,
-                  backgroundColor: Colors.redAccent,
+                  backgroundColor: _isLoading ? Colors.grey : Colors.redAccent,
                   child: IconButton(
-                    icon: const Icon(Icons.send, color: Colors.white),
-                    onPressed: _sendMessage,
+                    icon: _isLoading
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              color: Colors.white,
+                              strokeWidth: 2,
+                            ),
+                          )
+                        : const Icon(Icons.send, color: Colors.white),
+                    onPressed: _isLoading ? null : _sendMessage,
                   ),
                 ),
               ],
