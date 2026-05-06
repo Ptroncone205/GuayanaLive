@@ -25,10 +25,10 @@ class GeminiService {
             Part.text(promptText),
             Part.bytes(bytes),
           ],
-          model: 'gemini-1.5-flash',
+          model: 'gemini-2.5-flash',
           generationConfig: GenerationConfig(
             temperature: 0.8,
-            maxOutputTokens: 500,
+            maxOutputTokens: 1200,
           ),
         );
       } else {
@@ -43,10 +43,10 @@ class GeminiService {
               role: 'user',
             ),
           ],
-          modelName: 'gemini-1.5-pro',
+          modelName: 'gemini-2.5-flash',
           generationConfig: GenerationConfig(
             temperature: 0.8,
-            maxOutputTokens: 500,
+            maxOutputTokens: 1200,
           ),
         );
       }
