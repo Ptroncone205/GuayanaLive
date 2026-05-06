@@ -5,9 +5,10 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 
 class ProfileScreen extends StatefulWidget {
-  final String? userId; 
+  final String? userId;
+  final VoidCallback? onSetupComplete; // Added for setup flow
 
-  const ProfileScreen({super.key, this.userId});
+  const ProfileScreen({super.key, this.userId, this.onSetupComplete});
 
   @override
   State<ProfileScreen> createState() => _ProfileScreenState();
@@ -35,10 +36,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   String get _targetUserId => widget.userId ?? _supabase.auth.currentUser!.id;
   bool get _isMyProfile => widget.userId == null || widget.userId == _supabase.auth.currentUser!.id;
+  bool get _isSetupMode => widget.onSetupComplete != null;
 
   @override
   void initState() {
     super.initState();
+    if (_isSetupMode) {
+      _isEditing = true;
+    }
     _fetchProfileData();
   }
 
@@ -53,6 +58,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
       if (profileData != null) {
         _nameController.text = profileData['full_name'] ?? '';
+        // Special case: if it's 'usuario', clear it to force user to enter a real name
+        if (_nameController.text.toLowerCase() == 'usuario') {
+            _nameController.text = '';
+        }
+        
         _usernameController.text = profileData['username'] ?? '';
         _bioController.text = profileData['bio'] ?? '';
         _locationController.text = profileData['location'] ?? '';
@@ -115,26 +125,30 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _saveProfile() async {
-    if (_nameController.text.trim().isEmpty || _usernameController.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Nombre y Usuario son requeridos')));
+    final name = _nameController.text.trim();
+    if (name.isEmpty || name.toLowerCase() == 'usuario') {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Por favor, ingresa tu nombre completo')));
       return;
     }
 
     setState(() => _isLoading = true);
     try {
-      // USING UPSERT HERE IS THE MAGIC FIX
       await _supabase.from('profiles').upsert({
         'id': _targetUserId,
-        'full_name': _nameController.text.trim(),
+        'full_name': name,
         'username': _usernameController.text.trim(),
         'bio': _bioController.text.trim(),
         'location': _locationController.text.trim(),
         'website': _websiteController.text.trim(),
       });
 
-      setState(() => _isEditing = false);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Perfil guardado permanentemente')));
+        if (_isSetupMode) {
+          widget.onSetupComplete!();
+        } else {
+          setState(() => _isEditing = false);
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Perfil guardado con éxito')));
+        }
       }
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error al guardar: $e')));
@@ -169,10 +183,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    // Prevent going back if in setup mode
+    Widget content = Scaffold(
       appBar: AppBar(
-        title: Text(_isMyProfile ? 'Mi perfil' : 'Perfil'),
+        title: Text(_isSetupMode ? 'Configura tu perfil' : (_isMyProfile ? 'Mi perfil' : 'Perfil')),
         backgroundColor: Colors.redAccent,
+        // Hide leading back button if in setup mode
+        automaticallyImplyLeading: !_isSetupMode,
         actions: [
           if (_isMyProfile)
             IconButton(
@@ -182,7 +199,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             )
         ],
       ),
-      body: _isLoading && _posts.isEmpty
+      body: _isLoading && _posts.isEmpty && !_isSetupMode
           ? const Center(child: CircularProgressIndicator(color: Colors.redAccent))
           : SingleChildScrollView(
               child: Padding(
@@ -190,6 +207,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    if (_isSetupMode)
+                      const Padding(
+                        padding: EdgeInsets.only(bottom: 20.0),
+                        child: Text(
+                          '¡Bienvenido! Antes de empezar, necesitamos que completes tu información básica.',
+                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500, color: Colors.redAccent),
+                        ),
+                      ),
                     Row(
                       children: [
                         // Avatar Section
@@ -227,7 +252,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                _nameController.text.isNotEmpty ? _nameController.text : 'Usuario',
+                                _nameController.text.isNotEmpty ? _nameController.text : 'Completa tu perfil',
                                 style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
                               ),
                               const SizedBox(height: 4),
@@ -236,7 +261,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                 style: const TextStyle(color: Colors.grey),
                               ),
                               const SizedBox(height: 12),
-                              if (_isMyProfile)
+                              if (_isMyProfile && !_isSetupMode)
                                 ElevatedButton(
                                   onPressed: _isEditing ? _saveProfile : () => setState(() => _isEditing = true),
                                   style: ElevatedButton.styleFrom(
@@ -251,34 +276,62 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ],
                     ),
                     const SizedBox(height: 24),
-                    _buildInfoField(label: 'Nombre *', controller: _nameController),
-                    _buildInfoField(label: 'Usuario *', controller: _usernameController),
+                    _buildInfoField(label: 'Nombre completo *', controller: _nameController),
                     _buildInfoField(label: 'Biografía', controller: _bioController),
                     _buildInfoField(label: 'Ubicación', controller: _locationController),
                     _buildInfoField(label: 'Sitio web', controller: _websiteController),
-                    const SizedBox(height: 12),
-                    Text(_isMyProfile ? 'Tus publicaciones recientes' : 'Publicaciones recientes', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 12),
-                    if (_posts.isEmpty)
-                       Text(_isMyProfile ? 'No has subido ninguna publicación.' : 'Sin publicaciones.', style: const TextStyle(color: Colors.grey))
-                    else
-                      GridView.count(
-                        crossAxisCount: 3,
-                        mainAxisSpacing: 8,
-                        crossAxisSpacing: 8,
-                        shrinkWrap: true,
-                        physics: const NeverScrollableScrollPhysics(),
-                        children: _posts.map((postUrl) {
-                          return ClipRRect(
-                            borderRadius: BorderRadius.circular(12),
-                            child: Image.network(postUrl, fit: BoxFit.cover),
-                          );
-                        }).toList(),
+                    
+                    if (_isSetupMode) ...[
+                      const SizedBox(height: 24),
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton(
+                          onPressed: _isLoading ? null : _saveProfile,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.redAccent,
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          ),
+                          child: _isLoading 
+                            ? const CircularProgressIndicator(color: Colors.white) 
+                            : const Text('Completar registro', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+                        ),
                       ),
+                    ],
+                    
+                    const SizedBox(height: 12),
+                    if (!_isSetupMode) ...[
+                        Text(_isMyProfile ? 'Tus publicaciones recientes' : 'Publicaciones recientes', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                        const SizedBox(height: 12),
+                        if (_posts.isEmpty)
+                           Text(_isMyProfile ? 'No has subido ninguna publicación.' : 'Sin publicaciones.', style: const TextStyle(color: Colors.grey))
+                        else
+                          GridView.count(
+                            crossAxisCount: 3,
+                            mainAxisSpacing: 8,
+                            crossAxisSpacing: 8,
+                            shrinkWrap: true,
+                            physics: const NeverScrollableScrollPhysics(),
+                            children: _posts.map((postUrl) {
+                              return ClipRRect(
+                                borderRadius: BorderRadius.circular(12),
+                                child: Image.network(postUrl, fit: BoxFit.cover),
+                              );
+                            }).toList(),
+                          ),
+                    ]
                   ],
                 ),
               ),
             ),
     );
+
+    if (_isSetupMode) {
+      return PopScope(
+        canPop: false,
+        child: content,
+      );
+    }
+    return content;
   }
 }
