@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 
 import 'camera_screen.dart';
 import 'services/openai_service.dart';
@@ -223,10 +224,15 @@ class _ChatScreenState extends State<ChatScreen> {
                       if (message.imagePath != null) ...[
                         ClipRRect(
                           borderRadius: BorderRadius.circular(12.0),
-                          child: Image.file(
-                            File(message.imagePath!),
-                            fit: BoxFit.cover,
-                          ),
+                          child: kIsWeb 
+                              ? Image.network(
+                                  message.imagePath!,
+                                  fit: BoxFit.cover,
+                                )
+                              : Image.file(
+                                  File(message.imagePath!),
+                                  fit: BoxFit.cover,
+                                ),
                         ),
                         const SizedBox(height: 8),
                       ],

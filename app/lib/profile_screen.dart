@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -9,6 +10,7 @@ class ProfileScreen extends StatefulWidget {
 
 class _ProfileScreenState extends State<ProfileScreen> {
   bool _isEditing = false;
+  bool _isLoading = true;
 
   final TextEditingController _nameController = TextEditingController(text: 'Paulo Guayana');
   final TextEditingController _usernameController = TextEditingController(text: '@paulog');
@@ -18,12 +20,35 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   int _followers = 2380;
   int _following = 182;
-  int _postsCount = 24;
+  int _postsCount = 0;
 
-  final List<String> _posts = List.generate(
-    8,
-    (index) => 'https://picsum.photos/300/300?random=${index + 20}',
-  );
+  List<String> _posts = [];
+  final _supabase = Supabase.instance.client;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchProfilePosts();
+  }
+
+  Future<void> _fetchProfilePosts() async {
+    try {
+      // Pulling the latest images to display in the profile grid
+      final response = await _supabase
+          .from('pins')
+          .select('image_url')
+          .order('created_at', ascending: false)
+          .limit(9); // Limit to a 3x3 grid size
+
+      setState(() {
+        _posts = (response as List).map((post) => post['image_url'] as String).toList();
+        _postsCount = _posts.length; 
+        _isLoading = false;
+      });
+    } catch (e) {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
 
   @override
   void dispose() {
@@ -157,22 +182,33 @@ class _ProfileScreenState extends State<ProfileScreen> {
               const SizedBox(height: 12),
               const Text('Publicaciones recientes', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
               const SizedBox(height: 12),
-              GridView.count(
-                crossAxisCount: 3,
-                mainAxisSpacing: 8,
-                crossAxisSpacing: 8,
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                children: _posts.map((postUrl) {
-                  return ClipRRect(
-                    borderRadius: BorderRadius.circular(12),
-                    child: Image.network(
-                      postUrl,
-                      fit: BoxFit.cover,
-                    ),
-                  );
-                }).toList(),
-              ),
+              
+              if (_isLoading)
+                 const Center(child: CircularProgressIndicator(color: Colors.redAccent))
+              else if (_posts.isEmpty)
+                 const Text('No has subido ninguna publicación todavía.', style: TextStyle(color: Colors.grey))
+              else
+                GridView.count(
+                  crossAxisCount: 3,
+                  mainAxisSpacing: 8,
+                  crossAxisSpacing: 8,
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  children: _posts.map((postUrl) {
+                    return ClipRRect(
+                      borderRadius: BorderRadius.circular(12),
+                      child: Image.network(
+                        postUrl,
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) => Container(
+                          color: Colors.grey.shade300,
+                          child: const Icon(Icons.broken_image, color: Colors.grey),
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ),
+
               const SizedBox(height: 24),
               const Text('Resumen', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
               const SizedBox(height: 10),
