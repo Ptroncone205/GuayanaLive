@@ -61,7 +61,6 @@ class _PinDetailScreenState extends State<PinDetailScreen> {
     _commentController.clear();
     
     try {
-      // Don't need to save 'username' anymore, just user_id
       await _supabase.from('comments').insert({
         'pin_id': widget.pin['id'],
         'text': text,
@@ -240,7 +239,7 @@ class _PinDetailScreenState extends State<PinDetailScreen> {
                       itemBuilder: (context, index) {
                         final comment = _comments[index];
                         final commenterProfile = comment['profiles'] as Map<String, dynamic>?;
-                        final commenterName = commenterProfile?['username'] ?? 'Usuario';
+                        final commenterName = commenterProfile?['full_name'] ?? 'Usuario';
                         final commenterId = comment['user_id'];
 
                         return Padding(
