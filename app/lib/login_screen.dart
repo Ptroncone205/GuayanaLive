@@ -163,7 +163,7 @@ class _LoginScreenState extends State<LoginScreen> {
           controller: _regEmailController,
           keyboardType: TextInputType.emailAddress,
           decoration: const InputDecoration(
-            labelText: 'Correo electrónico',
+            labelText: 'Email',
             prefixIcon: Icon(Icons.email),
             border: OutlineInputBorder(),
           ),
@@ -172,7 +172,7 @@ class _LoginScreenState extends State<LoginScreen> {
         TextField(
           controller: _regUsernameController,
           decoration: const InputDecoration(
-            labelText: 'Nombre de usuario',
+            labelText: 'Username',
             prefixIcon: Icon(Icons.alternate_email),
             border: OutlineInputBorder(),
           ),
@@ -182,7 +182,7 @@ class _LoginScreenState extends State<LoginScreen> {
           controller: _regPasswordController,
           obscureText: true,
           decoration: const InputDecoration(
-            labelText: 'Contraseña',
+            labelText: 'Password',
             prefixIcon: Icon(Icons.lock),
             border: OutlineInputBorder(),
           ),
@@ -192,7 +192,7 @@ class _LoginScreenState extends State<LoginScreen> {
           controller: _regConfirmPasswordController,
           obscureText: true,
           decoration: const InputDecoration(
-            labelText: 'Confirmar contraseña',
+            labelText: 'Confirm Password',
             prefixIcon: Icon(Icons.lock_outline),
             border: OutlineInputBorder(),
           ),

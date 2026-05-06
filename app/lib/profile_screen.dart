@@ -118,7 +118,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
       setState(() => _avatarUrl = newAvatarUrl);
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error al actualizar foto: $e')));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error updating avatar: $e')));
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -127,16 +127,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Future<void> _saveProfile() async {
     final name = _nameController.text.trim();
     if (name.isEmpty || name.toLowerCase() == 'usuario') {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Por favor, ingresa tu nombre completo')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Por favor, ingresa tu nombre completo'))
+      );
       return;
     }
 
     setState(() => _isLoading = true);
     try {
+      // REMOVED 'username' from the map to prevent changes and mismatches
       await _supabase.from('profiles').upsert({
         'id': _targetUserId,
         'full_name': name,
-        'username': _usernameController.text.trim(),
         'bio': _bioController.text.trim(),
         'location': _locationController.text.trim(),
         'website': _websiteController.text.trim(),
@@ -147,11 +149,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
           widget.onSetupComplete!();
         } else {
           setState(() => _isEditing = false);
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Perfil guardado con éxito')));
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Perfil guardado con éxito'))
+          );
         }
       }
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error al guardar: $e')));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error al guardar: $e'))
+        );
+      }
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -174,7 +182,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(12.0), borderSide: BorderSide.none),
             contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
           ),
-          maxLines: label == 'Biografía' ? 3 : 1,
+          maxLines: label == 'Bio' ? 3 : 1,
         ),
         const SizedBox(height: 12),
       ],
@@ -186,7 +194,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     // Prevent going back if in setup mode
     Widget content = Scaffold(
       appBar: AppBar(
-        title: Text(_isSetupMode ? 'Configura tu perfil' : (_isMyProfile ? 'Mi perfil' : 'Perfil')),
+        title: Text(_isSetupMode ? 'Set up your profile' : (_isMyProfile ? 'My profile' : 'Profile')),
         backgroundColor: Colors.redAccent,
         // Hide leading back button if in setup mode
         automaticallyImplyLeading: !_isSetupMode,
@@ -195,7 +203,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             IconButton(
               icon: const Icon(Icons.logout),
               onPressed: () => _supabase.auth.signOut(),
-              tooltip: 'Cerrar sesión',
+              tooltip: 'Log Out',
             )
         ],
       ),
@@ -211,7 +219,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       const Padding(
                         padding: EdgeInsets.only(bottom: 20.0),
                         child: Text(
-                          '¡Bienvenido! Antes de empezar, necesitamos que completes tu información básica.',
+                          'Welcome! Let\'s start by setting up your profile.',
                           style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500, color: Colors.redAccent),
                         ),
                       ),
@@ -268,7 +276,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                     backgroundColor: Colors.redAccent,
                                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
                                   ),
-                                  child: Text(_isEditing ? 'Guardar perfil' : 'Editar perfil', style: const TextStyle(color: Colors.white)),
+                                  child: Text(_isEditing ? 'Save Profile' : 'Edit Profile', style: const TextStyle(color: Colors.white)),
                                 ),
                             ],
                           ),
@@ -276,10 +284,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ],
                     ),
                     const SizedBox(height: 24),
-                    _buildInfoField(label: 'Nombre completo *', controller: _nameController),
-                    _buildInfoField(label: 'Biografía', controller: _bioController),
-                    _buildInfoField(label: 'Ubicación', controller: _locationController),
-                    _buildInfoField(label: 'Sitio web', controller: _websiteController),
+                    _buildInfoField(label: 'Display Name *', controller: _nameController),
+                    _buildInfoField(label: 'Bio', controller: _bioController),
+                    _buildInfoField(label: 'Location', controller: _locationController),
+                    _buildInfoField(label: 'Website', controller: _websiteController),
                     
                     if (_isSetupMode) ...[
                       const SizedBox(height: 24),
@@ -294,17 +302,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           ),
                           child: _isLoading 
                             ? const CircularProgressIndicator(color: Colors.white) 
-                            : const Text('Completar registro', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+                            : const Text('Complete Registration', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
                         ),
                       ),
                     ],
                     
                     const SizedBox(height: 12),
                     if (!_isSetupMode) ...[
-                        Text(_isMyProfile ? 'Tus publicaciones recientes' : 'Publicaciones recientes', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                        Text(_isMyProfile ? 'Your recent posts' : 'Recent posts', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                         const SizedBox(height: 12),
                         if (_posts.isEmpty)
-                           Text(_isMyProfile ? 'No has subido ninguna publicación.' : 'Sin publicaciones.', style: const TextStyle(color: Colors.grey))
+                           Text(_isMyProfile ? 'You have not uploaded any posts.' : 'No posts available.', style: const TextStyle(color: Colors.grey))
                         else
                           GridView.count(
                             crossAxisCount: 3,
