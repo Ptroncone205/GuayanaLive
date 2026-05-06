@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:flutter_gemini/flutter_gemini.dart';
 import 'login_screen.dart';
 import 'pinterest_screen.dart';
 import 'profile_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  Gemini.init(apiKey: 'AIzaSyADB8TsEgLfzN1MR3sWcXdWhGatD42cobo');
 
   await Supabase.initialize(
     url: 'https://oulpjjpvkfxcskrqibet.supabase.co',

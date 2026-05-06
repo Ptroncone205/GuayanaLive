@@ -5,7 +5,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 
 import 'camera_screen.dart';
-import 'services/openai_service.dart';
+import 'services/gemini_service.dart';
 
 class ChatScreen extends StatefulWidget {
   const ChatScreen({super.key});
@@ -32,7 +32,7 @@ class _ChatScreenState extends State<ChatScreen> {
   final TextEditingController _messageController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   final ImagePicker _picker = ImagePicker();
-  final OpenAIService _openAIService = OpenAIService();
+  final GeminiService _geminiService = GeminiService();
   bool _isLoading = false;
   final List<ChatMessage> _messages = [
     ChatMessage(
@@ -82,7 +82,7 @@ class _ChatScreenState extends State<ChatScreen> {
     _addMessage(ChatMessage(sender: 'ia', type: 'text', text: 'Escribiendo...'));
 
     try {
-      final response = await _openAIService.getChatResponse(userText, imagePath: imagePath);
+      final response = await _geminiService.getChatResponse(userText, imagePath: imagePath);
       if (!mounted) return;
       setState(() {
         final lastIndex = _messages.lastIndexWhere((m) => m.sender == 'ia' && m.text == 'Escribiendo...');
@@ -100,13 +100,13 @@ class _ChatScreenState extends State<ChatScreen> {
           _messages[lastIndex] = ChatMessage(
             sender: 'ia',
             type: 'text',
-            text: 'Ocurrió un error al conectar con la IA. Revisa tu clave de OpenAI y tu conexión a internet.',
+            text: 'Ocurrió un error al conectar con la IA. Revisa tu clave de Gemini y tu conexión a internet.',
           );
         } else {
           _addMessage(ChatMessage(
             sender: 'ia',
             type: 'text',
-            text: 'Ocurrió un error al conectar con la IA. Revisa tu clave de OpenAI y tu conexión a internet.',
+            text: 'Ocurrió un error al conectar con la IA. Revisa tu clave de Gemini y tu conexión a internet.',
           ));
         }
       });
