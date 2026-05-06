@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'profile_screen.dart';
+
 class PinDetailScreen extends StatefulWidget {
   final Map<String, dynamic> pin;
 
@@ -37,7 +39,7 @@ class _PinDetailScreenState extends State<PinDetailScreen> {
     try {
       final response = await _supabase
           .from('comments')
-          .select()
+          .select('*, profiles(username, full_name)') // Pull user profile data with comment
           .eq('pin_id', widget.pin['id'])
           .order('created_at', ascending: true);
 
@@ -59,15 +61,15 @@ class _PinDetailScreenState extends State<PinDetailScreen> {
     _commentController.clear();
     
     try {
-      final newComment = await _supabase.from('comments').insert({
+      // Don't need to save 'username' anymore, just user_id
+      await _supabase.from('comments').insert({
         'pin_id': widget.pin['id'],
         'text': text,
-        'username': 'Usuario', // In a real app, use the logged-in user
-      }).select().single();
-
-      setState(() {
-        _comments.add(newComment);
+        'user_id': _supabase.auth.currentUser!.id,
       });
+
+      // Fetch comments again to get the joined profile data
+      await _fetchComments();
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -152,11 +154,13 @@ class _PinDetailScreenState extends State<PinDetailScreen> {
 
   Widget _buildDetailsAndComments() {
     final pinTags = List<String>.from(widget.pin['tags'] ?? []);
+    final ownerProfile = widget.pin['profiles'] as Map<String, dynamic>?;
+    final ownerName = ownerProfile?['username'] ?? 'Anónimo';
+    final ownerId = widget.pin['user_id'];
     
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Actions row (Save button, share, etc)
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
@@ -178,17 +182,37 @@ class _PinDetailScreenState extends State<PinDetailScreen> {
         ),
         const SizedBox(height: 16),
         
-        // Title & Description
         Text(
           widget.pin['title'] ?? 'Sin título',
           style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
         ),
+        
+        // Post Owner Profile Header
+        if (ownerId != null) ...[
+          const SizedBox(height: 12),
+          GestureDetector(
+            onTap: () {
+              Navigator.push(context, MaterialPageRoute(builder: (_) => ProfileScreen(userId: ownerId)));
+            },
+            child: Row(
+              children: [
+                CircleAvatar(
+                  radius: 16,
+                  backgroundColor: Colors.redAccent.shade100,
+                  child: Text(ownerName[0].toUpperCase(), style: const TextStyle(color: Colors.white, fontSize: 12)),
+                ),
+                const SizedBox(width: 8),
+                Text(ownerName, style: const TextStyle(fontWeight: FontWeight.bold)),
+              ],
+            ),
+          ),
+        ],
+
         if (widget.pin['description'] != null) ...[
-          const SizedBox(height: 8),
+          const SizedBox(height: 12),
           Text(widget.pin['description']),
         ],
         
-        // Tags
         if (pinTags.isNotEmpty) ...[
           const SizedBox(height: 12),
           Wrap(
@@ -203,8 +227,6 @@ class _PinDetailScreenState extends State<PinDetailScreen> {
         ],
 
         const Divider(height: 32),
-        
-        // Comments Section
         const Text('Comentarios', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
         const SizedBox(height: 16),
         
@@ -217,22 +239,36 @@ class _PinDetailScreenState extends State<PinDetailScreen> {
                       itemCount: _comments.length,
                       itemBuilder: (context, index) {
                         final comment = _comments[index];
+                        final commenterProfile = comment['profiles'] as Map<String, dynamic>?;
+                        final commenterName = commenterProfile?['username'] ?? 'Usuario';
+                        final commenterId = comment['user_id'];
+
                         return Padding(
                           padding: const EdgeInsets.only(bottom: 12.0),
                           child: Row(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              CircleAvatar(
-                                radius: 16,
-                                backgroundColor: Colors.grey.shade300,
-                                child: Text(comment['username'][0].toUpperCase(), style: const TextStyle(fontSize: 12)),
+                              GestureDetector(
+                                onTap: commenterId == null ? null : () {
+                                  Navigator.push(context, MaterialPageRoute(builder: (_) => ProfileScreen(userId: commenterId)));
+                                },
+                                child: CircleAvatar(
+                                  radius: 16,
+                                  backgroundColor: Colors.grey.shade300,
+                                  child: Text(commenterName[0].toUpperCase(), style: const TextStyle(fontSize: 12)),
+                                ),
                               ),
                               const SizedBox(width: 8),
                               Expanded(
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Text(comment['username'], style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                                    GestureDetector(
+                                      onTap: commenterId == null ? null : () {
+                                        Navigator.push(context, MaterialPageRoute(builder: (_) => ProfileScreen(userId: commenterId)));
+                                      },
+                                      child: Text(commenterName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                                    ),
                                     Text(comment['text'], style: const TextStyle(fontSize: 14)),
                                   ],
                                 ),
@@ -244,7 +280,6 @@ class _PinDetailScreenState extends State<PinDetailScreen> {
                     ),
         ),
         
-        // Add Comment Input
         Container(
           padding: const EdgeInsets.only(top: 8),
           child: Row(

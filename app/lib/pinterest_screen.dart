@@ -59,7 +59,7 @@ class _PinterestScreenState extends State<PinterestScreen> {
     try {
       final pinResponse = await _supabase
           .from('pins')
-          .select('id,title,image_url,height,created_at')
+          .select('id,title,image_url,height,created_at, user_id, profiles(username, avatar_url)') // <-- Added user_id and profiles
           .order('created_at', ascending: false);
 
       final pins = List<Map<String, dynamic>>.from(pinResponse as List);
@@ -127,7 +127,8 @@ class _PinterestScreenState extends State<PinterestScreen> {
       final pinResponse = await _supabase.from('pins').insert({
         'title': title,
         'image_url': imageUrl,
-        'height': 200.0 + Random().nextInt(200), // Random height for masonry
+        'height': 200.0 + Random().nextInt(200), 
+        'user_id': _supabase.auth.currentUser!.id,
       }).select('id');
 
       final pinRows = List<Map<String, dynamic>>.from(pinResponse as List);
