@@ -1,11 +1,12 @@
 import 'dart:io';
+import 'dart:typed_data'; // Agregado para poder usar Uint8List
 
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 
 import 'camera_screen.dart';
-import 'services/gemini_service.dart';
+import 'services/groq_service.dart'; // Ajusta esta ruta si tu archivo se llama diferente
 
 class ChatScreen extends StatefulWidget {
   const ChatScreen({super.key});
@@ -32,13 +33,15 @@ class _ChatScreenState extends State<ChatScreen> {
   final TextEditingController _messageController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   final ImagePicker _picker = ImagePicker();
-  final GeminiService _geminiService = GeminiService();
+  final GroqService _groqService = GroqService();
   bool _isLoading = false;
+  String? _pendingImagePath;
+
   final List<ChatMessage> _messages = [
     ChatMessage(
       sender: 'ia',
       type: 'text',
-      text: 'Hola, soy tu asistente IA. Puedes escribir tu mensaje, subir una imagen desde tu dispositivo o abrir la cámara.',
+      text: 'Hola, soy tu asistente IA de GuayanaLive. Puedes escribir tu mensaje, subir una imagen desde tu dispositivo o abrir la cámara.',
     ),
   ];
 
@@ -65,15 +68,41 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
-  void _sendMessage() {
-    final text = _messageController.text.trim();
-    if (text.isEmpty || _isLoading) return;
-
-    _messageController.clear();
-    _addMessage(ChatMessage(sender: 'user', type: 'text', text: text));
-    _sendAIResponse(text);
+  void _removePendingImage() {
+    setState(() {
+      _pendingImagePath = null;
+    });
   }
 
+  void _sendMessage() {
+    final text = _messageController.text.trim();
+    if ((text.isEmpty && _pendingImagePath == null) || _isLoading) return;
+
+    final sendText = text.isNotEmpty
+        ? text
+        : 'Analiza esta imagen.';
+
+    if (_pendingImagePath != null) {
+      final imagePath = _pendingImagePath!;
+      setState(() {
+        _pendingImagePath = null;
+      });
+      _messageController.clear();
+      _addMessage(ChatMessage(
+        sender: 'user',
+        type: 'image',
+        text: sendText,
+        imagePath: imagePath,
+      ));
+      _sendAIResponse(sendText, imagePath: imagePath);
+    } else {
+      _messageController.clear();
+      _addMessage(ChatMessage(sender: 'user', type: 'text', text: sendText));
+      _sendAIResponse(sendText);
+    }
+  }
+
+  // --- AQUÍ ESTÁ EL CAMBIO MAGICO ---
   Future<void> _sendAIResponse(String userText, {String? imagePath}) async {
     setState(() {
       _isLoading = true;
@@ -82,8 +111,18 @@ class _ChatScreenState extends State<ChatScreen> {
     _addMessage(ChatMessage(sender: 'ia', type: 'text', text: 'Escribiendo...'));
 
     try {
-      final response = await _geminiService.getChatResponse(userText, imagePath: imagePath);
+      Uint8List? imageBytes;
+      
+      // Si hay una imagen, extraemos los bytes usando XFile (Funciona en Web y Mobile)
+      if (imagePath != null) {
+        imageBytes = await XFile(imagePath).readAsBytes();
+      }
+
+      // Le pasamos los bytes a nuestro nuevo GroqService
+      final response = await _groqService.getChatResponse(userText, imageBytes: imageBytes);
+      
       if (!mounted) return;
+      
       setState(() {
         final lastIndex = _messages.lastIndexWhere((m) => m.sender == 'ia' && m.text == 'Escribiendo...');
         if (lastIndex != -1) {
@@ -94,20 +133,17 @@ class _ChatScreenState extends State<ChatScreen> {
       });
     } catch (e) {
       if (!mounted) return;
+      final errorMessage = 'Error al conectar con la IA: ${e.toString()}';
       setState(() {
         final lastIndex = _messages.lastIndexWhere((m) => m.sender == 'ia' && m.text == 'Escribiendo...');
         if (lastIndex != -1) {
           _messages[lastIndex] = ChatMessage(
             sender: 'ia',
             type: 'text',
-            text: 'Ocurrió un error al conectar con la IA. Revisa tu clave de Gemini y tu conexión a internet.',
+            text: errorMessage,
           );
         } else {
-          _addMessage(ChatMessage(
-            sender: 'ia',
-            type: 'text',
-            text: 'Ocurrió un error al conectar con la IA. Revisa tu clave de Gemini y tu conexión a internet.',
-          ));
+          _addMessage(ChatMessage(sender: 'ia', type: 'text', text: errorMessage));
         }
       });
     } finally {
@@ -118,6 +154,7 @@ class _ChatScreenState extends State<ChatScreen> {
       }
     }
   }
+  // ----------------------------------
 
   Future<void> _showAttachmentOptions() async {
     return showModalBottomSheet<void>(
@@ -170,13 +207,12 @@ class _ChatScreenState extends State<ChatScreen> {
         );
         return;
       }
-      _addMessage(ChatMessage(
-        sender: 'user',
-        type: 'image',
-        text: 'Imagen adjuntada',
-        imagePath: pickedFile.path,
-      ));
-      _sendAIResponse('Aquí tienes una imagen que adjunté. ¿Qué opinas?', imagePath: pickedFile.path);
+      setState(() {
+        _pendingImagePath = pickedFile.path;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Imagen lista para enviar. Escribe tu mensaje y presiona enviar.')),
+      );
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -190,13 +226,12 @@ class _ChatScreenState extends State<ChatScreen> {
       MaterialPageRoute(builder: (context) => const CameraScreen()),
     );
     if (imagePath == null || !mounted) return;
-    _addMessage(ChatMessage(
-      sender: 'user',
-      type: 'image',
-      text: 'Foto tomada con la cámara',
-      imagePath: imagePath,
-    ));
-    _sendAIResponse('Aquí tienes una foto que tomé con la cámara. ¿Qué te parece?', imagePath: imagePath);
+    setState(() {
+      _pendingImagePath = imagePath;
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Imagen lista para enviar. Escribe tu mensaje y presiona enviar.')),
+    );
   }
 
   Widget _buildMessage(ChatMessage message) {
@@ -258,6 +293,7 @@ class _ChatScreenState extends State<ChatScreen> {
       appBar: AppBar(
         title: const Text('Chat IA'),
         backgroundColor: Colors.redAccent,
+        foregroundColor: Colors.white,
       ),
       body: Column(
         children: [
@@ -271,7 +307,43 @@ class _ChatScreenState extends State<ChatScreen> {
               },
             ),
           ),
-          if (_isLoading) const LinearProgressIndicator(minHeight: 3),
+          if (_pendingImagePath != null)
+            Container(
+              color: Colors.grey.shade100,
+              padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 10.0),
+              child: Row(
+                children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(12.0),
+                    child: kIsWeb
+                        ? Image.network(
+                            _pendingImagePath!,
+                            width: 64,
+                            height: 64,
+                            fit: BoxFit.cover,
+                          )
+                        : Image.file(
+                            File(_pendingImagePath!),
+                            width: 64,
+                            height: 64,
+                            fit: BoxFit.cover,
+                          ),
+                  ),
+                  const SizedBox(width: 12),
+                  const Expanded(
+                    child: Text(
+                      'Imagen seleccionada. Escribe un mensaje para enviarla junto con la solicitud.',
+                      style: TextStyle(fontSize: 14),
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close, color: Colors.redAccent),
+                    onPressed: _removePendingImage,
+                  ),
+                ],
+              ),
+            ),
+          if (_isLoading) const LinearProgressIndicator(minHeight: 3, color: Colors.redAccent,),
           const Divider(height: 1),
           Container(
             color: Colors.white,
