@@ -1,0 +1,21 @@
+import "dart:io";
+import "dart:typed_data";
+import "package:flutter_gemini/flutter_gemini.dart";
+import "package:dio/dio.dart";
+
+void main() async {
+  try {
+    Gemini.init(apiKey: "AIzaSyADB8TsEgLfzN1MR3sWcXdWhGatD42cobo");
+    final file = File("web/icons/Icon-512.png");
+    final bytes = await file.readAsBytes();
+    final r = await Gemini.instance.prompt(
+      parts: [Part.text("hola"), Part.text("describe la imagen"), Part.uint8List(bytes)],
+      model: "gemini-1.5-flash",
+    );
+    print("RESULT: " + (r?.output ?? "<null>"));
+  } catch (e, st) {
+    print("ERROR TYPE: ${e.runtimeType}");
+    print("ERROR: $e");
+    print(st);
+  }
+}

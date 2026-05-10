@@ -38,7 +38,9 @@ dependencies:
   flutter_staggered_grid_view: ^0.7.0
   image_picker: ^1.2.2
   camera: ^0.12.0+1
-  flutter_gemini: ^3.0.0
+  mime: ^2.0.0
+  http: ^1.6.0
+  flutter_dotenv: ^6.0.1
 
 dev_dependencies:
   flutter_test:
@@ -61,6 +63,9 @@ flutter:
   # included with your application, so that you can use the icons in
   # the material Icons class.
   uses-material-design: true
+
+  assets:
+    - assets/.env
 
   # To add assets to your application, add an assets section, like this:
   # assets:
