@@ -6,6 +6,9 @@ import 'login_screen.dart';
 import 'pinterest_screen.dart';
 import 'profile_screen.dart';
 
+// Global notifier for guest mode
+final ValueNotifier<bool> guestModeNotifier = ValueNotifier(false);
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await dotenv.load(fileName: 'assets/.env');
@@ -50,23 +53,16 @@ class _AuthGateState extends State<AuthGate> {
   void initState() {
     super.initState();
     _session = Supabase.instance.client.auth.currentSession;
-    if (_session != null) {
-      _checkProfileStatus();
-    } else {
-      _checkingProfile = false;
-    }
+    _checkProfileStatus();
     
     Supabase.instance.client.auth.onAuthStateChange.listen((data) {
       if (mounted) {
         setState(() {
           _session = data.session;
-          if (_session != null) {
-            _checkProfileStatus();
-          } else {
-            _checkingProfile = false;
-            _profileComplete = false;
-          }
         });
+        if (_session != null) {
+          _checkProfileStatus();
+        }
       }
     });
   }
@@ -75,7 +71,10 @@ class _AuthGateState extends State<AuthGate> {
     setState(() => _checkingProfile = true);
     try {
       final user = Supabase.instance.client.auth.currentUser;
-      if (user == null) return;
+      if (user == null) {
+        if (mounted) setState(() => _checkingProfile = false);
+        return;
+      }
 
       final data = await Supabase.instance.client
           .from('profiles')
@@ -86,7 +85,6 @@ class _AuthGateState extends State<AuthGate> {
       if (mounted) {
         setState(() {
           final fullName = data?['full_name'] as String?;
-          // Logic: incomplete if null, empty, or 'usuario' (case insensitive)
           _profileComplete = fullName != null && 
                              fullName.trim().isNotEmpty && 
                              fullName.trim().toLowerCase() != 'usuario';
@@ -102,26 +100,29 @@ class _AuthGateState extends State<AuthGate> {
 
   @override
   Widget build(BuildContext context) {
-    if (_session == null) {
-      return const LoginScreen();
-    }
+    // Listen to guest mode toggles securely
+    return ValueListenableBuilder<bool>(
+      valueListenable: guestModeNotifier,
+      builder: (context, isGuest, child) {
+        if (_session == null && !isGuest) {
+          return const LoginScreen();
+        }
 
-    if (_checkingProfile) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator(color: Colors.redAccent)),
-      );
-    }
+        if (_session != null && _checkingProfile) {
+          return const Scaffold(
+            body: Center(child: CircularProgressIndicator(color: Colors.redAccent)),
+          );
+        }
 
-    if (!_profileComplete) {
-      return ProfileScreen(
-        onSetupComplete: () {
-          setState(() {
-            _profileComplete = true;
-          });
-        },
-      );
-    }
-    
-    return const PinterestScreen();
+        if (_session != null && !_profileComplete) {
+          return ProfileScreen(
+            onSetupComplete: _checkProfileStatus,
+          );
+        }
+
+        // If Guest OR Setup is complete, grant access to Main Feed
+        return const PinterestScreen();
+      },
+    );
   }
 }

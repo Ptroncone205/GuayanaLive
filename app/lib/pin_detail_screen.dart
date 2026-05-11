@@ -3,6 +3,7 @@ import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'profile_screen.dart';
+import 'auth_modal.dart'; // ADDED
 
 class PinDetailScreen extends StatefulWidget {
   final Map<String, dynamic> pin;
@@ -22,6 +23,8 @@ class _PinDetailScreenState extends State<PinDetailScreen> {
   bool _isLoadingRelated = true;
   bool _isLoadingComments = true;
 
+  bool get isGuest => _supabase.auth.currentUser == null; // CHECK GUEST
+
   @override
   void initState() {
     super.initState();
@@ -39,7 +42,7 @@ class _PinDetailScreenState extends State<PinDetailScreen> {
     try {
       final response = await _supabase
           .from('comments')
-          .select('*, profiles(username, full_name)') // Pull user profile data with comment
+          .select('*, profiles(username, full_name)') 
           .eq('pin_id', widget.pin['id'])
           .order('created_at', ascending: true);
 
@@ -67,7 +70,6 @@ class _PinDetailScreenState extends State<PinDetailScreen> {
         'user_id': _supabase.auth.currentUser!.id,
       });
 
-      // Fetch comments again to get the joined profile data
       await _fetchComments();
     } catch (e) {
       if (mounted) {
@@ -83,7 +85,6 @@ class _PinDetailScreenState extends State<PinDetailScreen> {
       final tags = List<String>.from(widget.pin['tags'] ?? []);
       
       if (tags.isEmpty) {
-        // If no tags, just fetch some random recent pins
         final response = await _supabase
             .from('pins')
             .select('id,title,image_url,height')
@@ -99,7 +100,6 @@ class _PinDetailScreenState extends State<PinDetailScreen> {
         return;
       }
 
-      // Fetch pins that share at least one tag
       final matchingTagsResponse = await _supabase
           .from('tags')
           .select('id, name')
@@ -170,7 +170,7 @@ class _PinDetailScreenState extends State<PinDetailScreen> {
               ],
             ),
             ElevatedButton(
-              onPressed: () {},
+              onPressed: isGuest ? () => showAuthModal(context) : () {},
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.redAccent,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
@@ -186,7 +186,6 @@ class _PinDetailScreenState extends State<PinDetailScreen> {
           style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
         ),
         
-        // Post Owner Profile Header
         if (ownerId != null) ...[
           const SizedBox(height: 12),
           GestureDetector(
@@ -201,7 +200,10 @@ class _PinDetailScreenState extends State<PinDetailScreen> {
                   child: Text(ownerName[0].toUpperCase(), style: const TextStyle(color: Colors.white, fontSize: 12)),
                 ),
                 const SizedBox(width: 8),
-                Text(ownerName, style: const TextStyle(fontWeight: FontWeight.bold)),
+                Text(
+                  pinTags.isNotEmpty ? ownerName : 'Usuario eliminado',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontStyle: pinTags.isEmpty ? FontStyle.italic : FontStyle.normal)
+                ),
               ],
             ),
           ),
@@ -239,7 +241,7 @@ class _PinDetailScreenState extends State<PinDetailScreen> {
                       itemBuilder: (context, index) {
                         final comment = _comments[index];
                         final commenterProfile = comment['profiles'] as Map<String, dynamic>?;
-                        final commenterName = commenterProfile?['full_name'] ?? 'Usuario';
+                        final commenterName = commenterProfile?['username'] ?? 'Usuario';
                         final commenterId = comment['user_id'];
 
                         return Padding(
@@ -288,8 +290,13 @@ class _PinDetailScreenState extends State<PinDetailScreen> {
               Expanded(
                 child: TextField(
                   controller: _commentController,
+                  readOnly: isGuest,
+                  onTap: isGuest ? () {
+                    FocusScope.of(context).unfocus();
+                    showAuthModal(context);
+                  } : null,
                   decoration: InputDecoration(
-                    hintText: 'Añadir un comentario...',
+                    hintText: isGuest ? 'Inicia sesión para comentar...' : 'Añadir un comentario...',
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(24),
                       borderSide: BorderSide.none,
@@ -299,10 +306,10 @@ class _PinDetailScreenState extends State<PinDetailScreen> {
                     contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                     suffixIcon: IconButton(
                       icon: const Icon(Icons.send, color: Colors.grey),
-                      onPressed: _addComment,
+                      onPressed: isGuest ? () => showAuthModal(context) : _addComment,
                     ),
                   ),
-                  onSubmitted: (_) => _addComment(),
+                  onSubmitted: isGuest ? (_) => showAuthModal(context) : (_) => _addComment(),
                 ),
               ),
             ],
@@ -324,7 +331,6 @@ class _PinDetailScreenState extends State<PinDetailScreen> {
       body: SingleChildScrollView(
         child: Column(
           children: [
-            // Main Post Card
             Center(
               child: Container(
                 constraints: const BoxConstraints(maxWidth: 1000),
@@ -333,28 +339,20 @@ class _PinDetailScreenState extends State<PinDetailScreen> {
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(16),
                   boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.1),
-                      blurRadius: 10,
-                      offset: const Offset(0, 4),
-                    ),
+                    BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 10, offset: const Offset(0, 4)),
                   ],
                 ),
                 child: LayoutBuilder(
                   builder: (context, constraints) {
-                    // WIDE SCREEN LAYOUT (Web/Tablet)
                     if (constraints.maxWidth > 700) {
                       return Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Expanded(
-                            flex: 5,
-                            child: _buildImage(),
-                          ),
+                          Expanded(flex: 5, child: _buildImage()),
                           Expanded(
                             flex: 4,
                             child: Container(
-                              height: 600, // Fixed height to allow scrolling comments
+                              height: 600, 
                               padding: const EdgeInsets.all(24.0),
                               child: _buildDetailsAndComments(),
                             ),
@@ -362,12 +360,11 @@ class _PinDetailScreenState extends State<PinDetailScreen> {
                         ],
                       );
                     }
-                    // MOBILE LAYOUT
                     return Column(
                       children: [
                         _buildImage(),
                         Container(
-                          height: 400, // Give comments a fixed height block on mobile
+                          height: 400, 
                           padding: const EdgeInsets.all(16.0),
                           child: _buildDetailsAndComments(),
                         ),
@@ -378,7 +375,6 @@ class _PinDetailScreenState extends State<PinDetailScreen> {
               ),
             ),
 
-            // Related Pins Section
             const SizedBox(height: 24),
             const Text('Más como esto', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
             const SizedBox(height: 16),
@@ -405,20 +401,14 @@ class _PinDetailScreenState extends State<PinDetailScreen> {
                     final pin = _relatedPins[index];
                     return GestureDetector(
                       onTap: () {
-                        // Navigate to related pin
                         Navigator.pushReplacement(
                           context,
-                          MaterialPageRoute(
-                            builder: (context) => PinDetailScreen(pin: pin),
-                          ),
+                          MaterialPageRoute(builder: (context) => PinDetailScreen(pin: pin)),
                         );
                       },
                       child: ClipRRect(
                         borderRadius: BorderRadius.circular(12.0),
-                        child: Image.network(
-                          pin['image_url'],
-                          fit: BoxFit.cover,
-                        ),
+                        child: Image.network(pin['image_url'], fit: BoxFit.cover),
                       ),
                     );
                   },

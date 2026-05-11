@@ -11,6 +11,7 @@ import 'camera_screen.dart';
 import 'chat_screen.dart';
 import 'profile_screen.dart';
 import 'pin_detail_screen.dart';
+import 'auth_modal.dart'; // ADDED
 
 class PinterestScreen extends StatefulWidget {
   const PinterestScreen({super.key});
@@ -30,11 +31,14 @@ class _PinterestScreenState extends State<PinterestScreen> {
   List<Map<String, dynamic>> _pins = [];
   List<Map<String, dynamic>> _filteredPins = [];
   List<String> _existingTags = [];
-  List<String> _selectedTagFilters = [];
+  final List<String> _selectedTagFilters = [];
   final TextEditingController _tagController = TextEditingController();
-  List<String> _draftTags = [];
+  final List<String> _draftTags = [];
 
   final _supabase = Supabase.instance.client;
+  
+  // Helper to check if guest
+  bool get isGuest => _supabase.auth.currentUser == null;
 
   @override
   void initState() {
@@ -59,7 +63,7 @@ class _PinterestScreenState extends State<PinterestScreen> {
     try {
       final pinResponse = await _supabase
           .from('pins')
-          .select('id,title,image_url,height,created_at, user_id, profiles(username, avatar_url)') // <-- Added user_id and profiles
+          .select('id,title,image_url,height,created_at, user_id, profiles(username, avatar_url)') 
           .order('created_at', ascending: false);
 
       final pins = List<Map<String, dynamic>>.from(pinResponse as List);
@@ -71,7 +75,7 @@ class _PinterestScreenState extends State<PinterestScreen> {
               await _supabase
                   .from('pin_tags')
                   .select('pin_id, tags(name)')
-                  .inFilter('pin_id', pinIds)
+                  .inFilter('pin_id', pinIds) 
               as List);
 
       final pinTagsMap = <int, List<String>>{};
@@ -99,6 +103,7 @@ class _PinterestScreenState extends State<PinterestScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Error cargando publicaciones: $e')),
         );
+          print('Error fetching pins: $e');
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -107,11 +112,9 @@ class _PinterestScreenState extends State<PinterestScreen> {
 
   Future<void> _uploadPin(XFile image, String title, List<String> tags) async {
     try {
-      // Use image.name instead of image.path for the extension, as web blob URLs don't have extensions
       final fileExt = image.name.split('.').last;
       final fileName = '${DateTime.now().millisecondsSinceEpoch}.$fileExt';
 
-      // 1. Upload image to Supabase Storage (Handling Web vs Mobile)
       if (kIsWeb) {
         final bytes = await image.readAsBytes();
         await _supabase.storage.from('images').uploadBinary(fileName, bytes);
@@ -120,15 +123,13 @@ class _PinterestScreenState extends State<PinterestScreen> {
         await _supabase.storage.from('images').upload(fileName, file);
       }
 
-      // 2. Get public URL
       final imageUrl = _supabase.storage.from('images').getPublicUrl(fileName);
 
-      // 3. Insert record into database
       final pinResponse = await _supabase.from('pins').insert({
         'title': title,
         'image_url': imageUrl,
         'height': 200.0 + Random().nextInt(200), 
-        'user_id': _supabase.auth.currentUser!.id,
+        'user_id': _supabase.auth.currentUser!.id, 
       }).select('id');
 
       final pinRows = List<Map<String, dynamic>>.from(pinResponse as List);
@@ -144,7 +145,6 @@ class _PinterestScreenState extends State<PinterestScreen> {
         }
       }
 
-      // 4. Refresh feed
       await _fetchPins();
       await _fetchExistingTags();
       
@@ -175,9 +175,7 @@ class _PinterestScreenState extends State<PinterestScreen> {
       setState(() {
         _existingTags = tags.map((tag) => tag['name'] as String).toList();
       });
-    } catch (_) {
-      // Ignore tag loading errors for now.
-    }
+    } catch (_) { }
   }
 
   String _normalizeTag(String tag) {
@@ -192,7 +190,7 @@ class _PinterestScreenState extends State<PinterestScreen> {
       final existingResponse = await _supabase
           .from('tags')
           .select('id,name')
-          .inFilter('name', normalizedTags);
+          .inFilter('name', normalizedTags); 
 
       final existingTags = List<Map<String, dynamic>>.from(existingResponse as List);
       final existingTagNames = existingTags
@@ -209,7 +207,7 @@ class _PinterestScreenState extends State<PinterestScreen> {
       final allResponse = await _supabase
           .from('tags')
           .select('id,name')
-          .inFilter('name', normalizedTags);
+          .inFilter('name', normalizedTags); 
 
       final allTags = List<Map<String, dynamic>>.from(allResponse as List);
       if (!mounted) return [];
@@ -553,7 +551,8 @@ class _PinterestScreenState extends State<PinterestScreen> {
         ],
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: _showAddPostOptions,
+        // Block action if guest
+        onPressed: isGuest ? () => showAuthModal(context) : _showAddPostOptions,
         backgroundColor: Colors.redAccent,
         child: const Icon(Icons.add),
       ),
@@ -579,7 +578,7 @@ class _PinterestScreenState extends State<PinterestScreen> {
                   icon: Icons.home_filled,
                   label: 'Feed',
                   onTap: () {
-                    _fetchPins(); // Refresh feed manually
+                    _fetchPins(); 
                   },
                 ),
                 _NavButton(
