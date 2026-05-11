@@ -1,5 +1,10 @@
+import 'dart:math';
+
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
+import 'package:http/http.dart' as http;
+import 'package:image_gallery_saver/image_gallery_saver.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'profile_screen.dart';
@@ -21,12 +26,17 @@ class _PinDetailScreenState extends State<PinDetailScreen> {
   List<Map<String, dynamic>> _comments = [];
   bool _isLoadingRelated = true;
   bool _isLoadingComments = true;
+  bool _isLiked = false;
+  bool _isLikeLoading = false;
+  bool _isSavingImage = false;
+  int _likesCount = 0;
 
   @override
   void initState() {
     super.initState();
     _fetchComments();
     _fetchRelatedPins();
+    _fetchLikeState();
   }
 
   @override
@@ -39,35 +49,75 @@ class _PinDetailScreenState extends State<PinDetailScreen> {
     try {
       final response = await _supabase
           .from('comments')
-          .select('*, profiles(username, full_name)') // Pull user profile data with comment
+          .select('id, pin_id, text, user_id, created_at')
           .eq('pin_id', widget.pin['id'])
           .order('created_at', ascending: true);
 
+      final comments = List<Map<String, dynamic>>.from(response as List);
+      final userIds = comments
+          .map((comment) => comment['user_id'] as String?)
+          .whereType<String>()
+          .toSet()
+          .toList();
+
+      final profiles = userIds.isEmpty
+          ? <Map<String, dynamic>>[]
+          : List<Map<String, dynamic>>.from(
+              await _supabase
+                  .from('profiles')
+                  .select('id, username, full_name')
+                  .inFilter('id', userIds),
+            );
+
+      final profileById = {
+        for (final profile in profiles)
+          profile['id'] as String: profile,
+      };
+
       if (mounted) {
         setState(() {
-          _comments = List<Map<String, dynamic>>.from(response);
+          _comments = comments.map((comment) {
+            final userId = comment['user_id'] as String?;
+            return {
+              ...comment,
+              'profiles': userId != null ? profileById[userId] : null,
+            };
+          }).toList();
           _isLoadingComments = false;
         });
       }
     } catch (e) {
-      if (mounted) setState(() => _isLoadingComments = false);
+      if (mounted) {
+        setState(() => _isLoadingComments = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error cargando comentarios: $e')),
+        );
+      }
     }
   }
 
   Future<void> _addComment() async {
     final text = _commentController.text.trim();
+    final currentUser = _supabase.auth.currentUser;
     if (text.isEmpty) return;
+    if (currentUser == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Debes iniciar sesión para comentar.')),
+        );
+      }
+      return;
+    }
 
     _commentController.clear();
-    
+
     try {
       await _supabase.from('comments').insert({
         'pin_id': widget.pin['id'],
         'text': text,
-        'user_id': _supabase.auth.currentUser!.id,
+        'user_id': currentUser.id,
       });
 
-      // Fetch comments again to get the joined profile data
       await _fetchComments();
     } catch (e) {
       if (mounted) {
@@ -75,6 +125,135 @@ class _PinDetailScreenState extends State<PinDetailScreen> {
           SnackBar(content: Text('Error al enviar comentario: $e')),
         );
       }
+    }
+  }
+
+  String get _likesField {
+    if (widget.pin.containsKey('likes_count')) return 'likes_count';
+    if (widget.pin.containsKey('likes')) return 'likes';
+    return 'likes_count';
+  }
+
+  bool get _hasLikesField {
+    return widget.pin.containsKey('likes_count') || widget.pin.containsKey('likes');
+  }
+
+  Future<void> _fetchLikeState() async {
+    final pinId = widget.pin['id'];
+    if (pinId == null) return;
+
+    if (_hasLikesField) {
+      if (mounted) {
+        setState(() {
+          _likesCount = widget.pin['likes_count'] ?? widget.pin['likes'] ?? 0;
+          _isLiked = false;
+        });
+      }
+      return;
+    }
+
+    if (mounted) {
+      setState(() {
+        _likesCount = 0;
+        _isLiked = false;
+      });
+    }
+  }
+
+  Future<void> _toggleLike() async {
+    final pinId = widget.pin['id'];
+    final currentUserId = _supabase.auth.currentUser?.id;
+    if (pinId == null) {
+      return;
+    }
+
+    if (_isLikeLoading) return;
+
+    if (!_hasLikesField) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Funcionalidad de likes no está disponible para esta publicación.')),
+        );
+      }
+      return;
+    }
+
+    if (currentUserId == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Debes iniciar sesión para dar like.')),
+        );
+      }
+      return;
+    }
+
+    setState(() => _isLikeLoading = true);
+
+    try {
+      final newCount = _isLiked ? max(0, _likesCount - 1) : _likesCount + 1;
+      final updated = await _supabase
+          .from('pins')
+          .update({_likesField: newCount})
+          .eq('id', pinId)
+          .select(_likesField)
+          .maybeSingle();
+
+      if (mounted) {
+        setState(() {
+          _isLiked = !_isLiked;
+          _likesCount = updated != null ? (updated[_likesField] as int? ?? newCount) : newCount;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error al actualizar like: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isLikeLoading = false);
+    }
+  }
+
+  Future<void> _saveImageToGallery() async {
+    if (kIsWeb) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Abre la imagen en el navegador para guardarla.')),
+        );
+      }
+      return;
+    }
+
+    if (_isSavingImage) return;
+    setState(() => _isSavingImage = true);
+
+    try {
+      final response = await http.get(Uri.parse(widget.pin['image_url'] ?? ''));
+      if (response.statusCode != 200) {
+        throw Exception('No se pudo descargar la imagen');
+      }
+
+      final fileName = 'pin_${widget.pin['id']}_${DateTime.now().millisecondsSinceEpoch}';
+      final result = await ImageGallerySaver.saveImage(
+        response.bodyBytes,
+        name: fileName,
+      );
+
+      final saved = result != null && (result['isSuccess'] == true || result['filePath'] != null);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(saved ? 'Imagen guardada en la galería' : 'No se pudo guardar la imagen')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error guardando imagen: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isSavingImage = false);
     }
   }
 
@@ -167,15 +346,26 @@ class _PinDetailScreenState extends State<PinDetailScreen> {
               children: [
                 IconButton(icon: const Icon(Icons.more_horiz), onPressed: () {}),
                 IconButton(icon: const Icon(Icons.share), onPressed: () {}),
+                IconButton(
+                  icon: _isLikeLoading
+                      ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2))
+                      : Icon(
+                          _isLiked ? Icons.favorite : Icons.favorite_border,
+                          color: _isLiked ? Colors.redAccent : Colors.black,
+                        ),
+                  onPressed: _toggleLike,
+                ),
               ],
             ),
             ElevatedButton(
-              onPressed: () {},
+              onPressed: _isSavingImage ? null : _saveImageToGallery,
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.redAccent,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
               ),
-              child: const Text('Guardar', style: TextStyle(color: Colors.white)),
+              child: _isSavingImage
+                  ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                  : const Text('Guardar', style: TextStyle(color: Colors.white)),
             ),
           ],
         ),
@@ -185,6 +375,10 @@ class _PinDetailScreenState extends State<PinDetailScreen> {
           widget.pin['title'] ?? 'Sin título',
           style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
         ),
+        if (_likesCount > 0) ...[
+          const SizedBox(height: 8),
+          Text('$_likesCount likes', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.black54)),
+        ],
         
         // Post Owner Profile Header
         if (ownerId != null) ...[
