@@ -1,5 +1,3 @@
-import 'dart:math';
-
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
@@ -9,6 +7,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'profile_screen.dart';
+import 'services/like_chat_repository.dart';
 
 class PinDetailScreen extends StatefulWidget {
   final Map<String, dynamic> pin;
@@ -21,6 +20,7 @@ class PinDetailScreen extends StatefulWidget {
 
 class _PinDetailScreenState extends State<PinDetailScreen> {
   final _supabase = Supabase.instance.client;
+  final LikeRepository _likeRepository = InMemoryLikeRepository();
   final TextEditingController _commentController = TextEditingController();
   
   List<Map<String, dynamic>> _relatedPins = [];
@@ -153,56 +153,36 @@ class _PinDetailScreenState extends State<PinDetailScreen> {
     }
   }
 
-  String get _likesField {
-    if (widget.pin.containsKey('likes_count')) return 'likes_count';
-    if (widget.pin.containsKey('likes')) return 'likes';
-    return 'likes_count';
-  }
-
-  bool get _hasLikesField {
-    return widget.pin.containsKey('likes_count') || widget.pin.containsKey('likes');
-  }
-
   Future<void> _fetchLikeState() async {
     final pinId = widget.pin['id'];
     if (pinId == null) return;
 
-    if (_hasLikesField) {
+    final currentUserId = _supabase.auth.currentUser?.id;
+    final defaultLikes = widget.pin['likes_count'] ?? widget.pin['likes'] ?? 0;
+
+    try {
+      final likeState = await _likeRepository.fetchLikeState(pinId, currentUserId, defaultLikes: defaultLikes);
+      if (!mounted) return;
+      setState(() {
+        _likesCount = likeState.likesCount;
+        _isLiked = likeState.isLiked;
+      });
+    } catch (_) {
       if (mounted) {
         setState(() {
-          _likesCount = widget.pin['likes_count'] ?? widget.pin['likes'] ?? 0;
+          _likesCount = defaultLikes;
           _isLiked = false;
         });
       }
-      return;
-    }
-
-    if (mounted) {
-      setState(() {
-        _likesCount = 0;
-        _isLiked = false;
-      });
     }
   }
 
   Future<void> _toggleLike() async {
     final pinId = widget.pin['id'];
     final currentUserId = _supabase.auth.currentUser?.id;
-    if (pinId == null) {
-      return;
-    }
+    if (pinId == null) return;
 
     if (_isLikeLoading) return;
-
-    if (!_hasLikesField) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Funcionalidad de likes no está disponible para esta publicación.')),
-        );
-      }
-      return;
-    }
-
     if (currentUserId == null) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -213,22 +193,15 @@ class _PinDetailScreenState extends State<PinDetailScreen> {
     }
 
     setState(() => _isLikeLoading = true);
+    final defaultLikes = widget.pin['likes_count'] ?? widget.pin['likes'] ?? 0;
 
     try {
-      final newCount = _isLiked ? max(0, _likesCount - 1) : _likesCount + 1;
-      final updated = await _supabase
-          .from('pins')
-          .update({_likesField: newCount})
-          .eq('id', pinId)
-          .select(_likesField)
-          .maybeSingle();
-
-      if (mounted) {
-        setState(() {
-          _isLiked = !_isLiked;
-          _likesCount = updated != null ? (updated[_likesField] as int? ?? newCount) : newCount;
-        });
-      }
+      final likeState = await _likeRepository.toggleLike(pinId, currentUserId, defaultLikes: defaultLikes);
+      if (!mounted) return;
+      setState(() {
+        _likesCount = likeState.likesCount;
+        _isLiked = likeState.isLiked;
+      });
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -264,7 +237,7 @@ class _PinDetailScreenState extends State<PinDetailScreen> {
     try {
       final response = await http.get(Uri.parse(imageUrl));
       if (response.statusCode == 200) {
-        final result = await ImageGallerySaver.saveImage(
+        await ImageGallerySaver.saveImage(
           response.bodyBytes,
           name: "GuayanaLive_${DateTime.now().millisecondsSinceEpoch}",
         );
