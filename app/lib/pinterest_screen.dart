@@ -11,6 +11,7 @@ import 'camera_screen.dart';
 import 'chat_screen.dart';
 import 'profile_screen.dart';
 import 'pin_detail_screen.dart';
+import 'user_chat_screen.dart';
 import 'auth_modal.dart';
 import 'services/groq_service.dart'; // Importación de Groq
 
@@ -803,6 +804,19 @@ class _PinterestScreenState extends State<PinterestScreen> {
                   label: 'IA',
                   onTap: () {
                     setState(() => _selectedIndex = 1);
+                  },
+                ),
+                _NavButton(
+                  icon: Icons.message,
+                  label: 'Chat',
+                  onTap: () {
+                    if (isGuest) {
+                      showAuthModal(context);
+                      return;
+                    }
+                    Navigator.of(context).push(
+                      MaterialPageRoute(builder: (context) => const UserChatScreen()),
+                    );
                   },
                 ),
                 _NavButton(
