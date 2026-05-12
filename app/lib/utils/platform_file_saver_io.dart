@@ -1,12 +1,12 @@
 import 'dart:io';
 import 'dart:typed_data';
 
-import 'package:image_gallery_saver/image_gallery_saver.dart';
+import 'package:image_gallery_saver_plus/image_gallery_saver_plus.dart';
 
 Future<String?> saveImageToDevice(Uint8List bytes, String fileName) async {
   try {
     if (Platform.isAndroid || Platform.isIOS) {
-      final result = await ImageGallerySaver.saveImage(bytes, name: fileName);
+      final result = await ImageGallerySaverPlus.saveImage(bytes, name: fileName);
       final success = result != null && (result['isSuccess'] == true || result['filePath'] != null);
       if (success) {
         return result['filePath']?.toString() ?? fileName;
