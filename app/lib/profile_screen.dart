@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 
 import 'auth_modal.dart';
 import 'main.dart'; 
+import 'user_chat_screen.dart'; // Importación necesaria para la navegación al chat
 
 class ProfileScreen extends StatefulWidget {
   final String? userId;
@@ -37,6 +38,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   List<String> _posts = [];
   final _supabase = Supabase.instance.client;
 
+  // Getters de utilidad
   bool get isGuest => widget.userId == null && _supabase.auth.currentUser == null;
   String get _targetUserId => widget.userId ?? _supabase.auth.currentUser?.id ?? '';
   bool get _isMyProfile => widget.userId == null || widget.userId == _supabase.auth.currentUser?.id;
@@ -89,6 +91,58 @@ class _ProfileScreenState extends State<ProfileScreen> {
         });
       }
     } catch (e) {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  // Lógica para iniciar o abrir un chat existente
+  Future<void> _startChatWithUser() async {
+    final currentUser = _supabase.auth.currentUser;
+    if (currentUser == null) return;
+    
+    setState(() => _isLoading = true);
+
+    try {
+      // 1. Buscar si ya existe un hilo entre estos dos usuarios
+      final existingThread = await _supabase.from('chat_threads')
+          .select('id')
+          .or('and(user1_id.eq.${currentUser.id},user2_id.eq.$_targetUserId),and(user1_id.eq.$_targetUserId,user2_id.eq.${currentUser.id})')
+          .maybeSingle();
+
+      String threadId;
+      if (existingThread != null) {
+        threadId = existingThread['id'];
+      } else {
+        // 2. Si no existe, crear uno nuevo
+        final insertRes = await _supabase.from('chat_threads').insert({
+          'user1_id': currentUser.id,
+          'user2_id': _targetUserId,
+          'last_message': 'Chat iniciado',
+        }).select('id').single();
+        threadId = insertRes['id'];
+      }
+
+      final partner = ChatPartner(
+        id: _targetUserId,
+        name: _nameController.text.isNotEmpty ? _nameController.text : 'Usuario',
+        avatarUrl: _avatarUrl,
+      );
+
+      if (!mounted) return;
+      Navigator.of(context).push(MaterialPageRoute(
+        builder: (_) => UserChatThreadScreen(
+          threadId: threadId,
+          currentUserId: currentUser.id,
+          partner: partner,
+        ),
+      ));
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error al iniciar chat: $e')),
+        );
+      }
+    } finally {
       if (mounted) setState(() => _isLoading = false);
     }
   }
@@ -278,6 +332,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                   style: const TextStyle(color: Colors.grey),
                                 ),
                               const SizedBox(height: 12),
+                              
+                              // BOTONES DE ACCIÓN (Editar o Mensaje)
                               if (_isMyProfile)
                                 ElevatedButton(
                                   onPressed: isGuest 
@@ -290,6 +346,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                   child: Text(
                                     isGuest ? 'Iniciar sesión / Registrarse' : (_isEditing || _isSetupMode ? 'Guardar perfil' : 'Editar perfil'), 
                                     style: const TextStyle(color: Colors.white)
+                                  ),
+                                )
+                              else if (!isGuest)
+                                // Botón PM para perfiles de terceros
+                                ElevatedButton.icon(
+                                  onPressed: _startChatWithUser,
+                                  icon: const Icon(Icons.chat_bubble_outline, size: 18),
+                                  label: const Text('Enviar Mensaje'),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: Colors.green.shade700,
+                                    foregroundColor: Colors.white,
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
                                   ),
                                 ),
                             ],

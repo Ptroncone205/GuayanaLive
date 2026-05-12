@@ -32,12 +32,26 @@ class _PinDetailScreenState extends State<PinDetailScreen> {
     super.initState();
     _fetchComments();
     _fetchRelatedPins();
+    _checkLikeStatus();
   }
 
   @override
   void dispose() {
     _commentController.dispose();
     super.dispose();
+  }
+
+  // --- NUEVA FUNCIÓN PARA OBTENER EL ESTADO DEL LIKE ---
+  Future<void> _checkLikeStatus() async {
+    if (isGuest) return;
+    try {
+      final res = await _supabase.from('pin_likes')
+          .select('id')
+          .eq('pin_id', widget.pin['id'])
+          .eq('user_id', _supabase.auth.currentUser!.id)
+          .maybeSingle();
+      if (mounted) setState(() => _isLiked = res != null);
+    } catch (_) {}
   }
 
   Future<void> _fetchComments() async {
@@ -128,14 +142,35 @@ class _PinDetailScreenState extends State<PinDetailScreen> {
     }
   }
 
-  void _toggleLike() {
+  Future<void> _toggleLike() async {
     if (isGuest) {
       showAuthModal(context);
       return;
     }
+
+    final userId = _supabase.auth.currentUser!.id;
+    final pinId = widget.pin['id'];
+
+    // UI optimista: Cambiamos el estado visualmente al instante
     setState(() {
       _isLiked = !_isLiked;
     });
+
+    try {
+      if (_isLiked) {
+        await _supabase.from('pin_likes').insert({'pin_id': pinId, 'user_id': userId});
+      } else {
+        await _supabase.from('pin_likes').delete().eq('pin_id', pinId).eq('user_id', userId);
+      }
+    } catch (e) {
+      // Si falla, revertimos
+      if (mounted) {
+        setState(() => _isLiked = !_isLiked);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error actualizando like: $e')),
+        );
+      }
+    }
   }
 
   Future<void> _fetchRelatedPins() async {
