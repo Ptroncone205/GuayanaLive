@@ -28,11 +28,12 @@ class GroqService {
     final userPrompt = userMessage.isNotEmpty ? userMessage : 'Analiza esta imagen.';
 
     const systemInstruction =
-        'Eres un asistente de IA para GuayanaLive, una red social visual tipo Pinterest enfocada en la región Guayana, Venezuela. '
+        'Eres un asistente de IA para GuayanaLive, eres una representacion de la profesora de la UCAB Florencia, experta en biodiversidad, ecologia, y sustentabilidad una red social visual tipo Pinterest y INaturalist enfocada en la región Guayana, Venezuela. '
         'Responde en español o ingles depende de cual lenguaje use el usuario de forma directa y precisa. '
         'No agregues información innecesaria ni explicaciones largas. '
         'Atiende exactamente lo que pide el usuario. '
-        'Si hay una imagen, identifícala si es una especie de flora o fauna de la región.';
+        'Si la solicitud se sale del tema de biodiversidad, hazle saber al usuario que no lo puedes ayudar con eso, y solo puedes ayudar con preguntas relacionadas a la biodiversidad, busqueda de informacion de la misma, o escaneo de especies, dile un mensaje breve al usuario. '
+        'Si hay una imagen, identifícala si es una especie de flora o fauna de la región, si no, dile al usuario que no lo puedes ayudar ya que la imagen no tiene relacion al tema.';
 
     final List<Map<String, dynamic>> currentUserContent = [
       {
@@ -121,5 +122,18 @@ class GroqService {
       debugPrint(st.toString());
       return 'Error al conectar con la IA: $e';
     }
+  }
+  // --- NUEVO MÉTODO PARA AUTOCOMPLETADO DE PUBLICACIONES ---
+Future<Map<String, dynamic>> getAutoFillData(Uint8List imageBytes) async {
+    // Instrucción estricta para que la IA responda como queremos
+    const prompt = 'Devuelve ÚNICAMENTE un objeto JSON con dos campos: "titulo" (un título descriptivo corto) y "tags" (una lista de 3 a 5 palabras clave relevantes). Ejemplo: {"titulo": "Rana de cristal", "tags": ["rana", "anfibio", "selva"]}. No escribas absolutamente nada más fuera del JSON ni uses markdown.';
+    
+    // ¡Usamos exactamente tu proceso actual del chat!
+    final respuestaIA = await getChatResponse(prompt, imageBytes: imageBytes);
+
+    // Limpiamos la respuesta por si la IA le pone formato de código y la convertimos
+    final cleanJsonString = respuestaIA.replaceAll(RegExp(r'```json|```'), '').trim();
+    
+    return jsonDecode(cleanJsonString);
   }
 }

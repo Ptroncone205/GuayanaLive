@@ -11,7 +11,8 @@ import 'camera_screen.dart';
 import 'chat_screen.dart';
 import 'profile_screen.dart';
 import 'pin_detail_screen.dart';
-import 'auth_modal.dart'; // ADDED
+import 'auth_modal.dart';
+import 'services/groq_service.dart'; // Importación de Groq
 
 class PinterestScreen extends StatefulWidget {
   const PinterestScreen({super.key});
@@ -37,6 +38,11 @@ class _PinterestScreenState extends State<PinterestScreen> {
 
   final _supabase = Supabase.instance.client;
   
+  // --- VARIABLES DE NAVEGACIÓN Y CHAT ---
+  int _selectedIndex = 0; // 0 para Feed, 1 para Chat IA
+  final GlobalKey<ChatScreenState> _chatKey = GlobalKey();
+  // --------------------------------------
+
   // Helper to check if guest
   bool get isGuest => _supabase.auth.currentUser == null;
 
@@ -103,7 +109,6 @@ class _PinterestScreenState extends State<PinterestScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Error cargando publicaciones: $e')),
         );
-          print('Error fetching pins: $e');
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -254,11 +259,15 @@ class _PinterestScreenState extends State<PinterestScreen> {
     _filterPins(_searchController.text);
   }
 
+  // MODAL DE SUBIDA CON LA IA Y SUGERENCIAS
   Future<void> _showUploadDialog(XFile image) async {
     final titleController = TextEditingController();
     _tagController.clear();
     setState(() => _draftTags.clear());
+    
     bool isUploading = false;
+    bool isAutoFilling = false;
+    final GroqService groqService = GroqService(); // IA
 
     await showDialog(
       context: context,
@@ -275,111 +284,169 @@ class _PinterestScreenState extends State<PinterestScreen> {
 
             return AlertDialog(
               title: const Text('Nueva publicación'),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(8.0),
-                    child: kIsWeb
-                        ? Image.network(
-                            image.path,
-                            height: 150,
-                            width: 300,
-                            fit: BoxFit.cover,
-                            errorBuilder: (context, error, stackTrace) => Container(
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(8.0),
+                      child: kIsWeb
+                          ? Image.network(
+                              image.path,
                               height: 150,
                               width: 300,
-                              color: Colors.grey.shade300,
-                              child: const Icon(Icons.broken_image, color: Colors.grey),
+                              fit: BoxFit.cover,
+                              errorBuilder: (context, error, stackTrace) => Container(
+                                height: 150,
+                                width: 300,
+                                color: Colors.grey.shade300,
+                                child: const Icon(Icons.broken_image, color: Colors.grey),
+                              ),
+                            )
+                          : Image.file(
+                              File(image.path),
+                              height: 150,
+                              width: 300,
+                              fit: BoxFit.cover,
                             ),
-                          )
-                        : Image.file(
-                            File(image.path),
-                            height: 150,
-                            width: 300,
-                            fit: BoxFit.cover,
-                          ),
-                  ),
-                  const SizedBox(height: 16),
-                  TextField(
-                    controller: titleController,
-                    decoration: const InputDecoration(
-                      labelText: 'Título de la imagen',
-                      border: OutlineInputBorder(),
                     ),
-                    enabled: !isUploading,
-                  ),
-                  const SizedBox(height: 16),
-                  TextField(
-                    controller: _tagController,
-                    decoration: InputDecoration(
-                      labelText: 'Tags',
-                      hintText: 'ej. viaje, naturaleza',
-                      border: const OutlineInputBorder(),
-                      suffixIcon: IconButton(
-                        icon: const Icon(Icons.add),
-                        onPressed: _tagController.text.trim().isEmpty
-                            ? null
-                            : () => _addDraftTagsFromInput(_tagController.text, setDialogState),
-                      ),
-                    ),
-                    textInputAction: TextInputAction.done,
-                    onChanged: (_) => setDialogState(() {}),
-                    onSubmitted: (value) => _addDraftTagsFromInput(value, setDialogState),
-                    enabled: !isUploading,
-                  ),
-                  const SizedBox(height: 12),
-                  if (_draftTags.isNotEmpty)
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: Wrap(
-                        spacing: 6,
-                        runSpacing: 6,
-                        children: _draftTags.map((tag) {
-                          return Chip(
-                            label: Text(tag),
-                            onDeleted: () {
-                              setDialogState(() {
-                                _draftTags.remove(tag);
-                              });
-                            },
-                          );
-                        }).toList(),
-                      ),
-                    ),
-                  if (tagSuggestions.isNotEmpty) ...[
-                    const SizedBox(height: 12),
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: Wrap(
-                        spacing: 6,
-                        runSpacing: 6,
-                        children: tagSuggestions.map((tag) {
-                          return ActionChip(
-                            label: Text(tag),
-                            onPressed: () {
-                              setDialogState(() {
-                                if (!_draftTags.contains(tag)) {
-                                  _draftTags.add(tag);
+                    const SizedBox(height: 16),
+                    
+                    // --- BOTÓN MÁGICO DE IA ---
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.purple.shade50,
+                          foregroundColor: Colors.purple.shade700,
+                          elevation: 0,
+                          side: BorderSide(color: Colors.purple.shade200),
+                        ),
+                        icon: isAutoFilling 
+                            ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.purple))
+                            : const Icon(Icons.auto_awesome),
+                        label: Text(isAutoFilling ? 'Analizando imagen...' : '✨ Autocompletar con IA'),
+                        onPressed: (isUploading || isAutoFilling) ? null : () async {
+                          setDialogState(() => isAutoFilling = true);
+                          try {
+                            final bytes = await image.readAsBytes();
+                            final result = await groqService.getAutoFillData(bytes);
+                            
+                            setDialogState(() {
+                              titleController.text = result['titulo'] ?? '';
+                              final List<dynamic> aiTags = result['tags'] ?? [];
+                              for (var tag in aiTags) {
+                                final normalized = _normalizeTag(tag.toString());
+                                if (!_draftTags.contains(normalized) && normalized.isNotEmpty) {
+                                  _draftTags.add(normalized);
                                 }
-                                _tagController.clear();
-                              });
-                            },
-                          );
-                        }).toList(),
+                              }
+                            });
+                          } catch (e) {
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text('Error IA: $e'), backgroundColor: Colors.red),
+                              );
+                            }
+                          } finally {
+                            setDialogState(() => isAutoFilling = false);
+                          }
+                        },
                       ),
                     ),
+                    const SizedBox(height: 16),
+                    // ---------------------------
+
+                    TextField(
+                      controller: titleController,
+                      decoration: const InputDecoration(
+                        labelText: 'Título de la imagen',
+                        border: OutlineInputBorder(),
+                      ),
+                      enabled: !isUploading && !isAutoFilling,
+                    ),
+                    const SizedBox(height: 16),
+                    TextField(
+                      controller: _tagController,
+                      decoration: InputDecoration(
+                        labelText: 'Tags',
+                        hintText: 'ej. viaje, naturaleza',
+                        border: const OutlineInputBorder(),
+                        suffixIcon: IconButton(
+                          icon: const Icon(Icons.add),
+                          onPressed: _tagController.text.trim().isEmpty
+                              ? null
+                              : () => _addDraftTagsFromInput(_tagController.text, setDialogState),
+                        ),
+                      ),
+                      textInputAction: TextInputAction.done,
+                      onChanged: (_) => setDialogState(() {}),
+                      onSubmitted: (value) => _addDraftTagsFromInput(value, setDialogState),
+                      enabled: !isUploading && !isAutoFilling,
+                    ),
+                    const SizedBox(height: 12),
+                    
+                    if (_draftTags.isNotEmpty)
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: Wrap(
+                          spacing: 6,
+                          runSpacing: 6,
+                          children: _draftTags.map((tag) {
+                            return Chip(
+                              label: Text(tag),
+                              onDeleted: () {
+                                setDialogState(() {
+                                  _draftTags.remove(tag);
+                                });
+                              },
+                            );
+                          }).toList(),
+                        ),
+                      ),
+                      
+                    // --- SUGERENCIAS ---
+                    if (tagSuggestions.isNotEmpty) ...[
+                      const SizedBox(height: 12),
+                      const Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text('Sugerencias:', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey)),
+                      ),
+                      const SizedBox(height: 8),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: Wrap(
+                          spacing: 6,
+                          runSpacing: 6,
+                          children: tagSuggestions.map((tag) {
+                            return ActionChip(
+                              label: Text(tag),
+                              backgroundColor: Colors.white,
+                              side: BorderSide(color: Colors.green.shade200),
+                              onPressed: () {
+                                setDialogState(() {
+                                  if (!_draftTags.contains(tag)) {
+                                    _draftTags.add(tag);
+                                  }
+                                  _tagController.clear();
+                                });
+                              },
+                            );
+                          }).toList(),
+                        ),
+                      ),
+                    ],
                   ],
-                ],
+                ),
               ),
               actions: [
                 TextButton(
-                  onPressed: isUploading ? null : () => Navigator.pop(context),
+                  onPressed: isUploading || isAutoFilling ? null : () => Navigator.pop(context),
                   child: const Text('Cancelar'),
                 ),
                 ElevatedButton(
-                  style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
-                  onPressed: isUploading
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.green.shade700),
+                  onPressed: isUploading || isAutoFilling
                       ? null
                       : () async {
                           if (titleController.text.trim().isEmpty) {
@@ -517,56 +584,205 @@ class _PinterestScreenState extends State<PinterestScreen> {
     });
   }
 
+  // --- TU FEED ORIGINAL DE MASONRY GRID INTACTO ---
+  Widget _buildFeedContent() {
+    return Padding(
+      padding: const EdgeInsets.all(8.0),
+      child: _isLoading
+        ? const Center(child: CircularProgressIndicator(color: Colors.green))
+        : Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (_selectedTagFilters.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8.0),
+                  child: Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      ..._selectedTagFilters.map((tag) => FilterChip(
+                            label: Text(tag),
+                            selected: true,
+                            onSelected: (_) => _toggleTagFilter(tag),
+                          )),
+                      ActionChip(
+                        label: const Text('Borrar filtros'),
+                        onPressed: _clearTagFilters,
+                      ),
+                    ],
+                  ),
+                ),
+              Expanded(
+                child: _filteredPins.isEmpty
+                  ? Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(Icons.image_not_supported, size: 64, color: Colors.grey),
+                          const SizedBox(height: 16),
+                          const Text('No se encontraron publicaciones.'),
+                          TextButton(
+                            onPressed: _fetchPins,
+                            child: const Text('Recargar', style: TextStyle(color: Colors.green)),
+                          ),
+                        ],
+                      ),
+                    )
+                  : RefreshIndicator(
+                      onRefresh: _fetchPins,
+                      color: Colors.green,
+                      child: MasonryGridView.count(
+                          crossAxisCount: 4,
+                          mainAxisSpacing: 8.0,
+                          crossAxisSpacing: 8.0,
+                          itemCount: _filteredPins.length,
+                          itemBuilder: (context, index) {
+                            final pin = _filteredPins[index];
+                            final pinTags = List<String>.from(pin['tags'] as List? ?? []);
+
+                            return GestureDetector(
+                              onTap: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) => PinDetailScreen(pin: pin),
+                                  ),
+                                );
+                              },
+                              child: Container(
+                                height: (pin['height'] as num?)?.toDouble() ?? 250.0,
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(12.0),
+                                  color: Colors.grey.shade300,
+                                  image: DecorationImage(
+                                    image: NetworkImage(pin['image_url']),
+                                    fit: BoxFit.cover,
+                                  ),
+                                ),
+                                child: Stack(
+                                  children: [
+                                    Align(
+                                      alignment: Alignment.topLeft,
+                                      child: Container(
+                                        margin: const EdgeInsets.all(8.0),
+                                        padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
+                                        decoration: BoxDecoration(
+                                          color: Colors.black45,
+                                          borderRadius: BorderRadius.circular(12.0),
+                                        ),
+                                        child: Text(
+                                          pin['title'] ?? 'Sin título',
+                                          style: const TextStyle(color: Colors.white, fontSize: 12),
+                                        ),
+                                      ),
+                                    ),
+                                    if (pinTags.isNotEmpty)
+                                      Positioned(
+                                        left: 8,
+                                        right: 8,
+                                        bottom: 8,
+                                        child: Wrap(
+                                          spacing: 4,
+                                          runSpacing: 4,
+                                          children: pinTags.take(3).map((tag) {
+                                            return GestureDetector(
+                                              onTap: () => _toggleTagFilter(tag),
+                                              child: Container(
+                                                padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
+                                                decoration: BoxDecoration(
+                                                  color: Colors.black54,
+                                                  borderRadius: BorderRadius.circular(12.0),
+                                                ),
+                                                child: Text(
+                                                  tag,
+                                                  style: const TextStyle(color: Colors.white, fontSize: 10),
+                                                ),
+                                              ),
+                                            );
+                                          }).toList(),
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                    ),
+              ),
+            ],
+          ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: !_isSearching
-            ? const Text('Pinterest Style')
-            : TextField(
-                controller: _searchController,
-                focusNode: _searchFocusNode,
-                style: const TextStyle(color: Colors.white),
-                cursorColor: Colors.white,
-                decoration: InputDecoration(
-                  hintText: 'Buscar publicaciones',
-                  hintStyle: TextStyle(color: Colors.white.withOpacity(0.8)),
-                  border: InputBorder.none,
-                ),
-              ),
-        backgroundColor: Colors.redAccent,
-        actions: [
+        title: _selectedIndex == 1 
+            ? const Text('Chat IA')
+            : (!_isSearching
+                ? const Text('Guayana Live')
+                : TextField(
+                    controller: _searchController,
+                    focusNode: _searchFocusNode,
+                    style: const TextStyle(color: Colors.white),
+                    cursorColor: Colors.white,
+                    decoration: const InputDecoration(
+                      hintText: 'Buscar publicaciones',
+                      hintStyle: TextStyle(color: Color.fromRGBO(255, 255, 255, 0.8)),
+                      border: InputBorder.none,
+                    ),
+                  )),
+        backgroundColor: Colors.green.shade700,
+        actions: _selectedIndex == 0 ? [
           if (_isSearching)
             IconButton(
               icon: const Icon(Icons.close),
               onPressed: _stopSearch,
               tooltip: 'Cerrar búsqueda',
+              color: Colors.white,
             )
           else
             IconButton(
               icon: const Icon(Icons.search),
               onPressed: _startSearch,
               tooltip: 'Buscar',
+              color: Colors.white,
             ),
-        ],
+        ] : [],
       ),
-      floatingActionButton: FloatingActionButton(
-        // Block action if guest
-        onPressed: isGuest ? () => showAuthModal(context) : _showAddPostOptions,
-        backgroundColor: Colors.redAccent,
-        child: const Icon(Icons.add),
-      ),
+      
+      floatingActionButton: _selectedIndex == 0
+          ? FloatingActionButton(
+              onPressed: () async {
+                if (isGuest) {
+                  showAuthModal(context);
+                  return;
+                }
+                setState(() => _selectedIndex = 1);
+                
+                Future.delayed(const Duration(milliseconds: 150), () {
+                  _chatKey.currentState?.abrirCamaraDeseada();
+                });
+              },
+              backgroundColor: Colors.green.shade700,
+              tooltip: 'Escanear con IA',
+              child: const Icon(Icons.qr_code_scanner, color: Colors.white),
+            )
+          : null,
       floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
+      
       body: Row(
         children: [
           Container(
             width: 100,
-            color: Colors.red.shade50,
+            color: Colors.green.shade50,
             child: Column(
               children: [
                 const SizedBox(height: 20),
                 _NavButton(
-                  icon: Icons.person,
+                  icon: Icons.account_circle,
                   label: 'Perfil',
                   onTap: () async {
                     await Navigator.of(context).push(
@@ -578,155 +794,39 @@ class _PinterestScreenState extends State<PinterestScreen> {
                   icon: Icons.home_filled,
                   label: 'Feed',
                   onTap: () {
-                    _fetchPins(); 
+                    setState(() => _selectedIndex = 0);
+                    _fetchPins();
                   },
                 ),
                 _NavButton(
-                  icon: Icons.chat_bubble_outline,
+                  icon: Icons.auto_awesome,
                   label: 'IA',
-                  onTap: () async {
-                    await Navigator.of(context).push(
-                      MaterialPageRoute(builder: (context) => const ChatScreen()),
-                    );
+                  onTap: () {
+                    setState(() => _selectedIndex = 1);
                   },
                 ),
                 _NavButton(
-                  icon: Icons.camera_alt,
-                  label: 'Cámara',
+                  icon: Icons.cloud_upload, // Dejé el icono original de subir de la app verde
+                  label: 'Subir',
                   onTap: () async {
-                    await _openCameraScreen();
+                    if (isGuest) {
+                      showAuthModal(context);
+                    } else {
+                      await _showAddPostOptions();
+                    }
                   },
                 ),
               ],
             ),
           ),
+          
           Expanded(
-            child: Padding(
-              padding: const EdgeInsets.all(8.0),
-              child: _isLoading
-                ? const Center(child: CircularProgressIndicator(color: Colors.redAccent))
-                : Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      if (_selectedTagFilters.isNotEmpty)
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: 8.0),
-                          child: Wrap(
-                            spacing: 8,
-                            runSpacing: 8,
-                            children: [
-                              ..._selectedTagFilters.map((tag) => FilterChip(
-                                    label: Text(tag),
-                                    selected: true,
-                                    onSelected: (_) => _toggleTagFilter(tag),
-                                  )),
-                              ActionChip(
-                                label: const Text('Borrar filtros'),
-                                onPressed: _clearTagFilters,
-                              ),
-                            ],
-                          ),
-                        ),
-                      Expanded(
-                        child: _filteredPins.isEmpty
-                          ? Center(
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  const Icon(Icons.image_not_supported, size: 64, color: Colors.grey),
-                                  const SizedBox(height: 16),
-                                  const Text('No se encontraron publicaciones.'),
-                                  TextButton(
-                                    onPressed: _fetchPins,
-                                    child: const Text('Recargar', style: TextStyle(color: Colors.redAccent)),
-                                  ),
-                                ],
-                              ),
-                            )
-                          : RefreshIndicator(
-                              onRefresh: _fetchPins,
-                              color: Colors.redAccent,
-                              child: MasonryGridView.count(
-                                  crossAxisCount: 2,
-                                  mainAxisSpacing: 8.0,
-                                  crossAxisSpacing: 8.0,
-                                  itemCount: _filteredPins.length,
-                                  itemBuilder: (context, index) {
-                                    final pin = _filteredPins[index];
-                                    final pinTags = List<String>.from(pin['tags'] as List? ?? []);
-
-                                    return GestureDetector(
-                                      onTap: () {
-                                        Navigator.push(
-                                          context,
-                                          MaterialPageRoute(
-                                            builder: (context) => PinDetailScreen(pin: pin),
-                                          ),
-                                        );
-                                      },
-                                      child: Container(
-                                        height: (pin['height'] as num?)?.toDouble() ?? 250.0,
-                                        decoration: BoxDecoration(
-                                          borderRadius: BorderRadius.circular(12.0),
-                                          color: Colors.grey.shade300,
-                                          image: DecorationImage(
-                                            image: NetworkImage(pin['image_url']),
-                                            fit: BoxFit.cover,
-                                          ),
-                                        ),
-                                        child: Stack(
-                                          children: [
-                                            Align(
-                                              alignment: Alignment.topLeft,
-                                              child: Container(
-                                                margin: const EdgeInsets.all(8.0),
-                                                padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
-                                                decoration: BoxDecoration(
-                                                  color: Colors.black45,
-                                                  borderRadius: BorderRadius.circular(12.0),
-                                                ),
-                                                child: Text(
-                                                  pin['title'] ?? 'Sin título',
-                                                  style: const TextStyle(color: Colors.white, fontSize: 12),
-                                                ),
-                                              ),
-                                            ),
-                                            if (pinTags.isNotEmpty)
-                                              Positioned(
-                                                left: 8,
-                                                right: 8,
-                                                bottom: 8,
-                                                child: Wrap(
-                                                  spacing: 4,
-                                                  runSpacing: 4,
-                                                  children: pinTags.take(3).map((tag) {
-                                                    return GestureDetector(
-                                                      onTap: () => _toggleTagFilter(tag),
-                                                      child: Container(
-                                                        padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
-                                                        decoration: BoxDecoration(
-                                                          color: Colors.black54,
-                                                          borderRadius: BorderRadius.circular(12.0),
-                                                        ),
-                                                        child: Text(
-                                                          tag,
-                                                          style: const TextStyle(color: Colors.white, fontSize: 10),
-                                                        ),
-                                                      ),
-                                                    );
-                                                  }).toList(),
-                                                ),
-                                              ),
-                                          ],
-                                        ),
-                                      ),
-                                    );
-                                  },
-                                ),
-                            ),
-                      ),
-                    ],
-                  ),
+            child: IndexedStack(
+              index: _selectedIndex,
+              children: [
+                _buildFeedContent(),
+                ChatScreen(key: _chatKey),
+              ],
             ),
           ),
         ],
@@ -735,7 +835,7 @@ class _PinterestScreenState extends State<PinterestScreen> {
   }
 }
 
-class _NavButton extends StatelessWidget {
+class _NavButton extends StatefulWidget {
   final IconData icon;
   final String label;
   final VoidCallback onTap;
@@ -747,38 +847,38 @@ class _NavButton extends StatelessWidget {
   });
 
   @override
+  State<_NavButton> createState() => _NavButtonState();
+}
+
+class _NavButtonState extends State<_NavButton> {
+  bool _isHovered = false;
+
+  @override
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6.0),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(16.0),
-          child: Container(
-            padding: const EdgeInsets.symmetric(vertical: 12.0, horizontal: 8.0),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(16.0),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.05),
-                  blurRadius: 8.0,
-                  offset: const Offset(0, 2),
+      child: MouseRegion(
+        onEnter: (_) => setState(() => _isHovered = true),
+        onExit: (_) => setState(() => _isHovered = false),
+        child: AnimatedScale(
+          duration: const Duration(milliseconds: 150),
+          scale: _isHovered ? 1.1 : 1.0,
+          child: Semantics(
+            label: widget.label,
+            button: true,
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: widget.onTap,
+                borderRadius: BorderRadius.circular(16.0),
+                child: SizedBox(
+                  width: 56,
+                  height: 56,
+                  child: Center(
+                    child: Icon(widget.icon, color: Colors.green.shade700, size: 28),
+                  ),
                 ),
-              ],
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(icon, color: Colors.redAccent),
-                const SizedBox(height: 6),
-                Text(
-                  label,
-                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
-                  textAlign: TextAlign.center,
-                ),
-              ],
+              ),
             ),
           ),
         ),

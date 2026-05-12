@@ -2,17 +2,18 @@ import 'dart:io';
 import 'dart:typed_data'; // Agregado para poder usar Uint8List
 
 import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:image_picker/image_picker.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'camera_screen.dart';
-import 'services/groq_service.dart'; // Ajusta esta ruta si tu archivo se llama diferente
+import 'services/groq_service.dart';
 
 class ChatScreen extends StatefulWidget {
   const ChatScreen({super.key});
 
   @override
-  State<ChatScreen> createState() => _ChatScreenState();
+  State<ChatScreen> createState() => ChatScreenState(); // <-- Cambiado a público
 }
 
 class ChatMessage {
@@ -29,27 +30,60 @@ class ChatMessage {
   });
 }
 
-class _ChatScreenState extends State<ChatScreen> {
+class ChatScreenState extends State<ChatScreen> { // <-- Cambiado a público
   final TextEditingController _messageController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   final ImagePicker _picker = ImagePicker();
   final GroqService _groqService = GroqService();
+  final SupabaseClient _supabase = Supabase.instance.client;
+
   bool _isLoading = false;
   String? _pendingImagePath;
+  String? _userAvatarUrl;
 
   final List<ChatMessage> _messages = [
     ChatMessage(
       sender: 'ia',
       type: 'text',
-      text: 'Hola, soy tu asistente IA de GuayanaLive. Puedes escribir tu mensaje, subir una imagen desde tu dispositivo o abrir la cámara.',
+      text: 'Hola, soy la profesora Florencia, tu asistente IA de GuayanaLive. Puedes hacerme preguntas, o subir una imagen desde tu dispositivo para escanear alguna especie.',
     ),
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUserAvatar();
+  }
 
   @override
   void dispose() {
     _messageController.dispose();
     _scrollController.dispose();
     super.dispose();
+  }
+
+  // --- MÉTODO PÚBLICO PARA ABRIR LA CÁMARA DESDE FUERA ---
+  void abrirCamaraDeseada() {
+    _openCamera();
+  }
+  // -------------------------------------------------------
+
+  Future<void> _loadUserAvatar() async {
+    final user = _supabase.auth.currentUser;
+    if (user == null) return;
+    try {
+      final profile = await _supabase
+          .from('profiles')
+          .select('avatar_url')
+          .eq('id', user.id)
+          .maybeSingle();
+      final avatarUrl = profile?['avatar_url'] as String?;
+      if (mounted && avatarUrl != null && avatarUrl.isNotEmpty) {
+        setState(() {
+          _userAvatarUrl = avatarUrl;
+        });
+      }
+    } catch (_) {}
   }
 
   void _addMessage(ChatMessage message) {
@@ -102,7 +136,6 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
-  // --- AQUÍ ESTÁ EL CAMBIO MAGICO ---
   Future<void> _sendAIResponse(String userText, {String? imagePath}) async {
     setState(() {
       _isLoading = true;
@@ -113,12 +146,10 @@ class _ChatScreenState extends State<ChatScreen> {
     try {
       Uint8List? imageBytes;
       
-      // Si hay una imagen, extraemos los bytes usando XFile (Funciona en Web y Mobile)
       if (imagePath != null) {
         imageBytes = await XFile(imagePath).readAsBytes();
       }
 
-      // Le pasamos los bytes a nuestro nuevo GroqService
       final response = await _groqService.getChatResponse(userText, imageBytes: imageBytes);
       
       if (!mounted) return;
@@ -154,7 +185,6 @@ class _ChatScreenState extends State<ChatScreen> {
       }
     }
   }
-  // ----------------------------------
 
   Future<void> _showAttachmentOptions() async {
     return showModalBottomSheet<void>(
@@ -172,7 +202,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 subtitle: Text('Selecciona una imagen o abre la cámara'),
               ),
               ListTile(
-                leading: const Icon(Icons.photo_library),
+                leading: const Icon(Icons.photo_library, color: Colors.green),
                 title: const Text('Elegir desde dispositivo'),
                 onTap: () async {
                   Navigator.of(sheetContext).pop();
@@ -180,7 +210,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 },
               ),
               ListTile(
-                leading: const Icon(Icons.camera_alt),
+                leading: const Icon(Icons.qr_code_scanner, color: Colors.green),
                 title: const Text('Abrir cámara'),
                 onTap: () async {
                   Navigator.of(sheetContext).pop();
@@ -236,52 +266,78 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Widget _buildMessage(ChatMessage message) {
     final isUser = message.sender == 'user';
-    final alignment = isUser ? CrossAxisAlignment.end : CrossAxisAlignment.start;
-    final bubbleColor = isUser ? Colors.redAccent : Colors.grey.shade200;
+    final bubbleColor = isUser ? Colors.green.shade700 : Colors.grey.shade200;
     final textColor = isUser ? Colors.white : Colors.black87;
+
+    final avatar = CircleAvatar(
+      radius: 16,
+      backgroundColor: isUser ? Colors.green.shade700 : Colors.green.shade900,
+      backgroundImage: isUser && _userAvatarUrl != null && _userAvatarUrl!.isNotEmpty
+          ? NetworkImage(_userAvatarUrl!) as ImageProvider
+          : (!isUser ? const AssetImage('assets/ia_profile.png') : null),
+      child: (isUser && (_userAvatarUrl == null || _userAvatarUrl!.isEmpty)) ||
+              (!isUser && _userAvatarUrl == null)
+          ? Icon(
+              isUser ? Icons.person : Icons.auto_awesome,
+              size: 16,
+              color: Colors.white,
+            )
+          : null,
+    );
+
+    final bubble = Container(
+      constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.7),
+      decoration: BoxDecoration(
+        color: bubbleColor,
+        borderRadius: BorderRadius.circular(16.0),
+      ),
+      padding: const EdgeInsets.all(12.0),
+      child: message.type == 'image'
+          ? Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (message.imagePath != null) ...[
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(12.0),
+                    child: kIsWeb
+                        ? Image.network(
+                            message.imagePath!,
+                            fit: BoxFit.cover,
+                          )
+                        : Image.file(
+                            File(message.imagePath!),
+                            fit: BoxFit.cover,
+                          ),
+                  ),
+                  const SizedBox(height: 8),
+                ],
+                Text(
+                  message.text,
+                  style: TextStyle(color: textColor),
+                ),
+              ],
+            )
+          : Text(
+              message.text,
+              style: TextStyle(color: textColor),
+            ),
+    );
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6.0),
-      child: Column(
-        crossAxisAlignment: alignment,
+      child: Row(
+        mainAxisAlignment: isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.end,
         children: [
-          Container(
-            constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.7),
-            decoration: BoxDecoration(
-              color: bubbleColor,
-              borderRadius: BorderRadius.circular(16.0),
-            ),
-            padding: const EdgeInsets.all(12.0),
-            child: message.type == 'image'
-                ? Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      if (message.imagePath != null) ...[
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(12.0),
-                          child: kIsWeb 
-                              ? Image.network(
-                                  message.imagePath!,
-                                  fit: BoxFit.cover,
-                                )
-                              : Image.file(
-                                  File(message.imagePath!),
-                                  fit: BoxFit.cover,
-                                ),
-                        ),
-                        const SizedBox(height: 8),
-                      ],
-                      Text(
-                        message.text,
-                        style: TextStyle(color: textColor),
-                      ),
-                    ],
-                  )
-                : Text(
-                    message.text,
-                    style: TextStyle(color: textColor),
-                  ),
-          ),
+          if (!isUser) ...[
+            avatar,
+            const SizedBox(width: 8),
+          ],
+          bubble,
+          if (isUser) ...[
+            const SizedBox(width: 8),
+            avatar,
+          ],
         ],
       ),
     );
@@ -289,12 +345,8 @@ class _ChatScreenState extends State<ChatScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // SE ELIMINÓ EL APPBAR DE AQUÍ PORQUE AHORA ESTÁ INCORPORADO EN LA PANTALLA PRINCIPAL
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Chat IA'),
-        backgroundColor: Colors.redAccent,
-        foregroundColor: Colors.white,
-      ),
       body: Column(
         children: [
           Expanded(
@@ -337,7 +389,7 @@ class _ChatScreenState extends State<ChatScreen> {
                     ),
                   ),
                   IconButton(
-                    icon: const Icon(Icons.close, color: Colors.redAccent),
+                    icon: const Icon(Icons.close, color: Colors.green),
                     onPressed: _removePendingImage,
                   ),
                 ],
@@ -351,7 +403,7 @@ class _ChatScreenState extends State<ChatScreen> {
             child: Row(
               children: [
                 IconButton(
-                  icon: const Icon(Icons.attach_file, color: Colors.redAccent),
+                  icon: const Icon(Icons.attach_file, color: Colors.green),
                   onPressed: _isLoading ? null : _showAttachmentOptions,
                 ),
                 Expanded(
@@ -372,7 +424,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 const SizedBox(width: 8),
                 CircleAvatar(
                   radius: 24,
-                  backgroundColor: _isLoading ? Colors.grey : Colors.redAccent,
+                  backgroundColor: _isLoading ? Colors.grey : Colors.green.shade700,
                   child: IconButton(
                     icon: _isLoading
                         ? const SizedBox(

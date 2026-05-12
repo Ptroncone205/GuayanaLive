@@ -6,9 +6,9 @@ import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_gallery_saver/image_gallery_saver.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import 'profile_screen.dart';
-import 'auth_modal.dart'; // ADDED
 
 class PinDetailScreen extends StatefulWidget {
   final Map<String, dynamic> pin;
@@ -27,8 +27,6 @@ class _PinDetailScreenState extends State<PinDetailScreen> {
   List<Map<String, dynamic>> _comments = [];
   bool _isLoadingRelated = true;
   bool _isLoadingComments = true;
-
-  bool get isGuest => _supabase.auth.currentUser == null; // CHECK GUEST
   bool _isLiked = false;
   bool _isLikeLoading = false;
   bool _isSavingImage = false;
@@ -48,11 +46,34 @@ class _PinDetailScreenState extends State<PinDetailScreen> {
     super.dispose();
   }
 
+  // CORRECCIÓN AQUÍ: Cambiamos String a dynamic para que acepte números o textos sin fallar
+  Future<void> _deleteComment(dynamic commentId) async {
+    try {
+      await _supabase.from('comments').delete().eq('id', commentId);
+      
+      // Convertimos a texto para comparar correctamente y que desaparezca de la pantalla
+      setState(() {
+        _comments.removeWhere((c) => c['id'].toString() == commentId.toString());
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Comentario eliminado')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error al eliminar: $e')),
+        );
+      }
+    }
+  }
+
   Future<void> _fetchComments() async {
     try {
       final response = await _supabase
           .from('comments')
-          .select('*, profiles(username, full_name)') 
           .select('id, pin_id, text, user_id, created_at')
           .eq('pin_id', widget.pin['id'])
           .order('created_at', ascending: true);
@@ -220,11 +241,19 @@ class _PinDetailScreenState extends State<PinDetailScreen> {
   }
 
   Future<void> _saveImageToGallery() async {
+    final imageUrl = widget.pin['image_url'] ?? '';
+    if (imageUrl.isEmpty) return;
+
     if (kIsWeb) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Abre la imagen en el navegador para guardarla.')),
-        );
+      final uri = Uri.parse(imageUrl);
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('No se pudo abrir la imagen para descargar')),
+          );
+        }
       }
       return;
     }
@@ -233,29 +262,20 @@ class _PinDetailScreenState extends State<PinDetailScreen> {
     setState(() => _isSavingImage = true);
 
     try {
-      final response = await http.get(Uri.parse(widget.pin['image_url'] ?? ''));
-      if (response.statusCode != 200) {
-        throw Exception('No se pudo descargar la imagen');
-      }
-
-      final fileName = 'pin_${widget.pin['id']}_${DateTime.now().millisecondsSinceEpoch}';
-      final result = await ImageGallerySaver.saveImage(
-        response.bodyBytes,
-        name: fileName,
-      );
-
-      final saved = result != null && (result['isSuccess'] == true || result['filePath'] != null);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(saved ? 'Imagen guardada en la galería' : 'No se pudo guardar la imagen')),
+      final response = await http.get(Uri.parse(imageUrl));
+      if (response.statusCode == 200) {
+        final result = await ImageGallerySaver.saveImage(
+          response.bodyBytes,
+          name: "GuayanaLive_${DateTime.now().millisecondsSinceEpoch}",
         );
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('¡Imagen guardada en tu galería!')),
+          );
+        }
       }
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error guardando imagen: $e')),
-        );
-      }
+      debugPrint("Error save image: $e");
     } finally {
       if (mounted) setState(() => _isSavingImage = false);
     }
@@ -360,7 +380,6 @@ class _PinDetailScreenState extends State<PinDetailScreen> {
               ],
             ),
             ElevatedButton(
-              onPressed: isGuest ? () => showAuthModal(context) : () {},
               onPressed: _isSavingImage ? null : _saveImageToGallery,
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.redAccent,
@@ -397,10 +416,7 @@ class _PinDetailScreenState extends State<PinDetailScreen> {
                   child: Text(ownerName[0].toUpperCase(), style: const TextStyle(color: Colors.white, fontSize: 12)),
                 ),
                 const SizedBox(width: 8),
-                Text(
-                  pinTags.isNotEmpty ? ownerName : 'Usuario eliminado',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontStyle: pinTags.isEmpty ? FontStyle.italic : FontStyle.normal)
-                ),
+                Text(ownerName, style: const TextStyle(fontWeight: FontWeight.bold)),
               ],
             ),
           ),
@@ -434,48 +450,61 @@ class _PinDetailScreenState extends State<PinDetailScreen> {
               : _comments.isEmpty
                   ? const Center(child: Text('Aún no hay comentarios.', style: TextStyle(color: Colors.grey)))
                   : ListView.builder(
-                      itemCount: _comments.length,
-                      itemBuilder: (context, index) {
-                        final comment = _comments[index];
-                        final commenterProfile = comment['profiles'] as Map<String, dynamic>?;
-                        final commenterName = commenterProfile?['username'] ?? 'Usuario';
-                        final commenterId = comment['user_id'];
+            itemCount: _comments.length,
+            itemBuilder: (context, index) {
+              final comment = _comments[index];
+              final commenterProfile = comment['profiles'] as Map<String, dynamic>?;
+              final commenterName = commenterProfile?['full_name'] ?? 'Usuario';
+              final commenterId = comment['user_id'];
+              
+              final currentUserId = _supabase.auth.currentUser?.id;
+              final isMyComment = currentUserId != null && currentUserId == commenterId;
 
-                        return Padding(
-                          padding: const EdgeInsets.only(bottom: 12.0),
-                          child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              GestureDetector(
-                                onTap: commenterId == null ? null : () {
-                                  Navigator.push(context, MaterialPageRoute(builder: (_) => ProfileScreen(userId: commenterId)));
-                                },
-                                child: CircleAvatar(
-                                  radius: 16,
-                                  backgroundColor: Colors.grey.shade300,
-                                  child: Text(commenterName[0].toUpperCase(), style: const TextStyle(fontSize: 12)),
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    GestureDetector(
-                                      onTap: commenterId == null ? null : () {
-                                        Navigator.push(context, MaterialPageRoute(builder: (_) => ProfileScreen(userId: commenterId)));
-                                      },
-                                      child: Text(commenterName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                                    ),
-                                    Text(comment['text'], style: const TextStyle(fontSize: 14)),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                        );
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 12.0),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    GestureDetector(
+                      onTap: commenterId == null ? null : () {
+                        Navigator.push(context, MaterialPageRoute(builder: (_) => ProfileScreen(userId: commenterId)));
                       },
+                      child: CircleAvatar(
+                        radius: 16,
+                        backgroundColor: Colors.grey.shade300,
+                        child: Text(commenterName[0].toUpperCase(), style: const TextStyle(fontSize: 12)),
+                      ),
                     ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          GestureDetector(
+                            onTap: commenterId == null ? null : () {
+                              Navigator.push(context, MaterialPageRoute(builder: (_) => ProfileScreen(userId: commenterId)));
+                            },
+                            child: Text(commenterName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                          ),
+                          Text(comment['text'], style: const TextStyle(fontSize: 14)),
+                        ],
+                      ),
+                    ),
+                    if (isMyComment)
+                      IconButton(
+                      icon: const Icon(Icons.delete_outline, size: 20, color: Colors.grey),
+                      onPressed: () {
+                        if (comment['id'] != null) {
+                          _deleteComment(comment['id']);
+                        }
+                      },
+                      tooltip: 'Eliminar mi comentario',
+                    )
+                  ],
+                ),
+              );
+            },
+          )
         ),
         
         Container(
@@ -487,13 +516,8 @@ class _PinDetailScreenState extends State<PinDetailScreen> {
               Expanded(
                 child: TextField(
                   controller: _commentController,
-                  readOnly: isGuest,
-                  onTap: isGuest ? () {
-                    FocusScope.of(context).unfocus();
-                    showAuthModal(context);
-                  } : null,
                   decoration: InputDecoration(
-                    hintText: isGuest ? 'Inicia sesión para comentar...' : 'Añadir un comentario...',
+                    hintText: 'Añadir un comentario...',
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(24),
                       borderSide: BorderSide.none,
@@ -503,10 +527,10 @@ class _PinDetailScreenState extends State<PinDetailScreen> {
                     contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                     suffixIcon: IconButton(
                       icon: const Icon(Icons.send, color: Colors.grey),
-                      onPressed: isGuest ? () => showAuthModal(context) : _addComment,
+                      onPressed: _addComment,
                     ),
                   ),
-                  onSubmitted: isGuest ? (_) => showAuthModal(context) : (_) => _addComment(),
+                  onSubmitted: (_) => _addComment(),
                 ),
               ),
             ],
@@ -536,7 +560,11 @@ class _PinDetailScreenState extends State<PinDetailScreen> {
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(16),
                   boxShadow: [
-                    BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 10, offset: const Offset(0, 4)),
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.1),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
+                    ),
                   ],
                 ),
                 child: LayoutBuilder(
@@ -545,11 +573,14 @@ class _PinDetailScreenState extends State<PinDetailScreen> {
                       return Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Expanded(flex: 5, child: _buildImage()),
+                          Expanded(
+                            flex: 5,
+                            child: _buildImage(),
+                          ),
                           Expanded(
                             flex: 4,
                             child: Container(
-                              height: 600, 
+                              height: 600,
                               padding: const EdgeInsets.all(24.0),
                               child: _buildDetailsAndComments(),
                             ),
@@ -561,7 +592,7 @@ class _PinDetailScreenState extends State<PinDetailScreen> {
                       children: [
                         _buildImage(),
                         Container(
-                          height: 400, 
+                          height: 400,
                           padding: const EdgeInsets.all(16.0),
                           child: _buildDetailsAndComments(),
                         ),
@@ -571,7 +602,6 @@ class _PinDetailScreenState extends State<PinDetailScreen> {
                 ),
               ),
             ),
-
             const SizedBox(height: 24),
             const Text('Más como esto', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
             const SizedBox(height: 16),
@@ -600,12 +630,17 @@ class _PinDetailScreenState extends State<PinDetailScreen> {
                       onTap: () {
                         Navigator.pushReplacement(
                           context,
-                          MaterialPageRoute(builder: (context) => PinDetailScreen(pin: pin)),
+                          MaterialPageRoute(
+                            builder: (context) => PinDetailScreen(pin: pin),
+                          ),
                         );
                       },
                       child: ClipRRect(
                         borderRadius: BorderRadius.circular(12.0),
-                        child: Image.network(pin['image_url'], fit: BoxFit.cover),
+                        child: Image.network(
+                          pin['image_url'],
+                          fit: BoxFit.cover,
+                        ),
                       ),
                     );
                   },

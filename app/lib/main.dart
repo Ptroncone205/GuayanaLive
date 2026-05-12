@@ -27,10 +27,21 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Edu-Pinterest',
+      title: 'Guayana Live',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.redAccent),
+        colorScheme: ColorScheme.fromSeed(seedColor: Colors.green.shade700),
+        useMaterial3: true,
+        primaryColor: Colors.green.shade700,
+        appBarTheme: AppBarTheme(
+          backgroundColor: Colors.green.shade700,
+          foregroundColor: Colors.white,
+          iconTheme: const IconThemeData(color: Colors.white),
+        ),
+        iconTheme: IconThemeData(color: Colors.green.shade700),
+        floatingActionButtonTheme: FloatingActionButtonThemeData(
+          backgroundColor: Colors.green.shade700,
+        ),
       ),
       home: const AuthGate(),
     );
@@ -110,7 +121,7 @@ class _AuthGateState extends State<AuthGate> {
 
         if (_session != null && _checkingProfile) {
           return const Scaffold(
-            body: Center(child: CircularProgressIndicator(color: Colors.redAccent)),
+            body: Center(child: CircularProgressIndicator(color: Colors.green)),
           );
         }
 
