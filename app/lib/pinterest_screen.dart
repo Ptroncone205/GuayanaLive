@@ -8,21 +8,17 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 
 import 'camera_screen.dart';
-import 'chat_screen.dart';
-import 'profile_screen.dart';
 import 'pin_detail_screen.dart';
-import 'user_chat_screen.dart';
 import 'auth_modal.dart';
-import 'services/groq_service.dart'; // Importación de Groq
 
 class PinterestScreen extends StatefulWidget {
   const PinterestScreen({super.key});
 
   @override
-  State<PinterestScreen> createState() => _PinterestScreenState();
+  State<PinterestScreen> createState() => PinterestScreenState(); // State exposed globally
 }
 
-class _PinterestScreenState extends State<PinterestScreen> {
+class PinterestScreenState extends State<PinterestScreen> {
   final ImagePicker _picker = ImagePicker();
   final TextEditingController _searchController = TextEditingController();
   final FocusNode _searchFocusNode = FocusNode();
@@ -39,12 +35,6 @@ class _PinterestScreenState extends State<PinterestScreen> {
 
   final _supabase = Supabase.instance.client;
   
-  // --- VARIABLES DE NAVEGACIÓN Y CHAT ---
-  int _selectedIndex = 0; // 0 para Feed, 1 para Chat IA
-  final GlobalKey<ChatScreenState> _chatKey = GlobalKey();
-  // --------------------------------------
-
-  // Helper to check if guest
   bool get isGuest => _supabase.auth.currentUser == null;
 
   @override
@@ -260,15 +250,11 @@ class _PinterestScreenState extends State<PinterestScreen> {
     _filterPins(_searchController.text);
   }
 
-  // MODAL DE SUBIDA CON LA IA Y SUGERENCIAS
   Future<void> _showUploadDialog(XFile image) async {
     final titleController = TextEditingController();
     _tagController.clear();
     setState(() => _draftTags.clear());
-    
     bool isUploading = false;
-    bool isAutoFilling = false;
-    final GroqService groqService = GroqService(); // IA
 
     await showDialog(
       context: context,
@@ -285,169 +271,111 @@ class _PinterestScreenState extends State<PinterestScreen> {
 
             return AlertDialog(
               title: const Text('Nueva publicación'),
-              content: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(8.0),
-                      child: kIsWeb
-                          ? Image.network(
-                              image.path,
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(8.0),
+                    child: kIsWeb
+                        ? Image.network(
+                            image.path,
+                            height: 150,
+                            width: 300,
+                            fit: BoxFit.cover,
+                            errorBuilder: (context, error, stackTrace) => Container(
                               height: 150,
                               width: 300,
-                              fit: BoxFit.cover,
-                              errorBuilder: (context, error, stackTrace) => Container(
-                                height: 150,
-                                width: 300,
-                                color: Colors.grey.shade300,
-                                child: const Icon(Icons.broken_image, color: Colors.grey),
-                              ),
-                            )
-                          : Image.file(
-                              File(image.path),
-                              height: 150,
-                              width: 300,
-                              fit: BoxFit.cover,
+                              color: Colors.grey.shade300,
+                              child: const Icon(Icons.broken_image, color: Colors.grey),
                             ),
+                          )
+                        : Image.file(
+                            File(image.path),
+                            height: 150,
+                            width: 300,
+                            fit: BoxFit.cover,
+                          ),
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: titleController,
+                    decoration: const InputDecoration(
+                      labelText: 'Título de la imagen',
+                      border: OutlineInputBorder(),
                     ),
-                    const SizedBox(height: 16),
-                    
-                    // --- BOTÓN MÁGICO DE IA ---
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton.icon(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.purple.shade50,
-                          foregroundColor: Colors.purple.shade700,
-                          elevation: 0,
-                          side: BorderSide(color: Colors.purple.shade200),
-                        ),
-                        icon: isAutoFilling 
-                            ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.purple))
-                            : const Icon(Icons.auto_awesome),
-                        label: Text(isAutoFilling ? 'Analizando imagen...' : '✨ Autocompletar con IA'),
-                        onPressed: (isUploading || isAutoFilling) ? null : () async {
-                          setDialogState(() => isAutoFilling = true);
-                          try {
-                            final bytes = await image.readAsBytes();
-                            final result = await groqService.getAutoFillData(bytes);
-                            
-                            setDialogState(() {
-                              titleController.text = result['titulo'] ?? '';
-                              final List<dynamic> aiTags = result['tags'] ?? [];
-                              for (var tag in aiTags) {
-                                final normalized = _normalizeTag(tag.toString());
-                                if (!_draftTags.contains(normalized) && normalized.isNotEmpty) {
-                                  _draftTags.add(normalized);
-                                }
-                              }
-                            });
-                          } catch (e) {
-                            if (context.mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(content: Text('Error IA: $e'), backgroundColor: Colors.red),
-                              );
-                            }
-                          } finally {
-                            setDialogState(() => isAutoFilling = false);
-                          }
-                        },
+                    enabled: !isUploading,
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: _tagController,
+                    decoration: InputDecoration(
+                      labelText: 'Tags',
+                      hintText: 'ej. viaje, naturaleza',
+                      border: const OutlineInputBorder(),
+                      suffixIcon: IconButton(
+                        icon: const Icon(Icons.add),
+                        onPressed: _tagController.text.trim().isEmpty
+                            ? null
+                            : () => _addDraftTagsFromInput(_tagController.text, setDialogState),
                       ),
                     ),
-                    const SizedBox(height: 16),
-                    // ---------------------------
-
-                    TextField(
-                      controller: titleController,
-                      decoration: const InputDecoration(
-                        labelText: 'Título de la imagen',
-                        border: OutlineInputBorder(),
+                    textInputAction: TextInputAction.done,
+                    onChanged: (_) => setDialogState(() {}),
+                    onSubmitted: (value) => _addDraftTagsFromInput(value, setDialogState),
+                    enabled: !isUploading,
+                  ),
+                  const SizedBox(height: 12),
+                  if (_draftTags.isNotEmpty)
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Wrap(
+                        spacing: 6,
+                        runSpacing: 6,
+                        children: _draftTags.map((tag) {
+                          return Chip(
+                            label: Text(tag),
+                            onDeleted: () {
+                              setDialogState(() {
+                                _draftTags.remove(tag);
+                              });
+                            },
+                          );
+                        }).toList(),
                       ),
-                      enabled: !isUploading && !isAutoFilling,
                     ),
-                    const SizedBox(height: 16),
-                    TextField(
-                      controller: _tagController,
-                      decoration: InputDecoration(
-                        labelText: 'Tags',
-                        hintText: 'ej. viaje, naturaleza',
-                        border: const OutlineInputBorder(),
-                        suffixIcon: IconButton(
-                          icon: const Icon(Icons.add),
-                          onPressed: _tagController.text.trim().isEmpty
-                              ? null
-                              : () => _addDraftTagsFromInput(_tagController.text, setDialogState),
-                        ),
-                      ),
-                      textInputAction: TextInputAction.done,
-                      onChanged: (_) => setDialogState(() {}),
-                      onSubmitted: (value) => _addDraftTagsFromInput(value, setDialogState),
-                      enabled: !isUploading && !isAutoFilling,
-                    ),
+                  if (tagSuggestions.isNotEmpty) ...[
                     const SizedBox(height: 12),
-                    
-                    if (_draftTags.isNotEmpty)
-                      Align(
-                        alignment: Alignment.centerLeft,
-                        child: Wrap(
-                          spacing: 6,
-                          runSpacing: 6,
-                          children: _draftTags.map((tag) {
-                            return Chip(
-                              label: Text(tag),
-                              onDeleted: () {
-                                setDialogState(() {
-                                  _draftTags.remove(tag);
-                                });
-                              },
-                            );
-                          }).toList(),
-                        ),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Wrap(
+                        spacing: 6,
+                        runSpacing: 6,
+                        children: tagSuggestions.map((tag) {
+                          return ActionChip(
+                            label: Text(tag),
+                            onPressed: () {
+                              setDialogState(() {
+                                if (!_draftTags.contains(tag)) {
+                                  _draftTags.add(tag);
+                                }
+                                _tagController.clear();
+                              });
+                            },
+                          );
+                        }).toList(),
                       ),
-                      
-                    // --- SUGERENCIAS ---
-                    if (tagSuggestions.isNotEmpty) ...[
-                      const SizedBox(height: 12),
-                      const Align(
-                        alignment: Alignment.centerLeft,
-                        child: Text('Sugerencias:', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey)),
-                      ),
-                      const SizedBox(height: 8),
-                      Align(
-                        alignment: Alignment.centerLeft,
-                        child: Wrap(
-                          spacing: 6,
-                          runSpacing: 6,
-                          children: tagSuggestions.map((tag) {
-                            return ActionChip(
-                              label: Text(tag),
-                              backgroundColor: Colors.white,
-                              side: BorderSide(color: Colors.green.shade200),
-                              onPressed: () {
-                                setDialogState(() {
-                                  if (!_draftTags.contains(tag)) {
-                                    _draftTags.add(tag);
-                                  }
-                                  _tagController.clear();
-                                });
-                              },
-                            );
-                          }).toList(),
-                        ),
-                      ),
-                    ],
+                    ),
                   ],
-                ),
+                ],
               ),
               actions: [
                 TextButton(
-                  onPressed: isUploading || isAutoFilling ? null : () => Navigator.pop(context),
+                  onPressed: isUploading ? null : () => Navigator.pop(context),
                   child: const Text('Cancelar'),
                 ),
                 ElevatedButton(
-                  style: ElevatedButton.styleFrom(backgroundColor: Colors.green.shade700),
-                  onPressed: isUploading || isAutoFilling
+                  style: ElevatedButton.styleFrom(backgroundColor: Theme.of(context).primaryColor),
+                  onPressed: isUploading
                       ? null
                       : () async {
                           if (titleController.text.trim().isEmpty) {
@@ -479,7 +407,13 @@ class _PinterestScreenState extends State<PinterestScreen> {
     );
   }
 
-  Future<void> _showAddPostOptions() async {
+  // Exposed globally to trigger from MainLayout's Navbar
+  Future<void> showAddPostOptions() async {
+    if (isGuest) {
+      showAuthModal(context);
+      return;
+    }
+    
     await showModalBottomSheet<void>(
       context: context,
       shape: const RoundedRectangleBorder(
@@ -525,10 +459,7 @@ class _PinterestScreenState extends State<PinterestScreen> {
       );
 
       if (!mounted) return;
-
-      if (pickedFile == null) {
-        return;
-      }
+      if (pickedFile == null) return;
       
       await _showUploadDialog(pickedFile);
     } catch (e) {
@@ -585,143 +516,12 @@ class _PinterestScreenState extends State<PinterestScreen> {
     });
   }
 
-  // --- TU FEED ORIGINAL DE MASONRY GRID INTACTO ---
-  Widget _buildFeedContent() {
-    return Padding(
-      padding: const EdgeInsets.all(8.0),
-      child: _isLoading
-        ? const Center(child: CircularProgressIndicator(color: Colors.green))
-        : Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              if (_selectedTagFilters.isNotEmpty)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 8.0),
-                  child: Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      ..._selectedTagFilters.map((tag) => FilterChip(
-                            label: Text(tag),
-                            selected: true,
-                            onSelected: (_) => _toggleTagFilter(tag),
-                          )),
-                      ActionChip(
-                        label: const Text('Borrar filtros'),
-                        onPressed: _clearTagFilters,
-                      ),
-                    ],
-                  ),
-                ),
-              Expanded(
-                child: _filteredPins.isEmpty
-                  ? Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          const Icon(Icons.image_not_supported, size: 64, color: Colors.grey),
-                          const SizedBox(height: 16),
-                          const Text('No se encontraron publicaciones.'),
-                          TextButton(
-                            onPressed: _fetchPins,
-                            child: const Text('Recargar', style: TextStyle(color: Colors.green)),
-                          ),
-                        ],
-                      ),
-                    )
-                  : RefreshIndicator(
-                      onRefresh: _fetchPins,
-                      color: Colors.green,
-                      child: MasonryGridView.count(
-                          crossAxisCount: 4,
-                          mainAxisSpacing: 8.0,
-                          crossAxisSpacing: 8.0,
-                          itemCount: _filteredPins.length,
-                          itemBuilder: (context, index) {
-                            final pin = _filteredPins[index];
-                            final pinTags = List<String>.from(pin['tags'] as List? ?? []);
-
-                            return GestureDetector(
-                              onTap: () {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (context) => PinDetailScreen(pin: pin),
-                                  ),
-                                );
-                              },
-                              child: Container(
-                                height: (pin['height'] as num?)?.toDouble() ?? 250.0,
-                                decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(12.0),
-                                  color: Colors.grey.shade300,
-                                  image: DecorationImage(
-                                    image: NetworkImage(pin['image_url']),
-                                    fit: BoxFit.cover,
-                                  ),
-                                ),
-                                child: Stack(
-                                  children: [
-                                    Align(
-                                      alignment: Alignment.topLeft,
-                                      child: Container(
-                                        margin: const EdgeInsets.all(8.0),
-                                        padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
-                                        decoration: BoxDecoration(
-                                          color: Colors.black45,
-                                          borderRadius: BorderRadius.circular(12.0),
-                                        ),
-                                        child: Text(
-                                          pin['title'] ?? 'Sin título',
-                                          style: const TextStyle(color: Colors.white, fontSize: 12),
-                                        ),
-                                      ),
-                                    ),
-                                    if (pinTags.isNotEmpty)
-                                      Positioned(
-                                        left: 8,
-                                        right: 8,
-                                        bottom: 8,
-                                        child: Wrap(
-                                          spacing: 4,
-                                          runSpacing: 4,
-                                          children: pinTags.take(3).map((tag) {
-                                            return GestureDetector(
-                                              onTap: () => _toggleTagFilter(tag),
-                                              child: Container(
-                                                padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
-                                                decoration: BoxDecoration(
-                                                  color: Colors.black54,
-                                                  borderRadius: BorderRadius.circular(12.0),
-                                                ),
-                                                child: Text(
-                                                  tag,
-                                                  style: const TextStyle(color: Colors.white, fontSize: 10),
-                                                ),
-                                              ),
-                                            );
-                                          }).toList(),
-                                        ),
-                                      ),
-                                  ],
-                                ),
-                              ),
-                            );
-                          },
-                        ),
-                    ),
-              ),
-            ],
-          ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: !_isSearching
-            ? const Text('Pinterest Style')
+            ? const Text('Guayana Live')
             : TextField(
                 controller: _searchController,
                 focusNode: _searchFocusNode,
@@ -749,14 +549,6 @@ class _PinterestScreenState extends State<PinterestScreen> {
             ),
         ],
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: isGuest ? () => showAuthModal(context) : _showAddPostOptions,
-        backgroundColor: Theme.of(context).primaryColor,
-        child: const Icon(Icons.add, color: Colors.white,),
-      ),
-      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
-      
-      // ELIMINAMOS EL ROW Y EL SIDEBAR DE AQUÍ
       body: Padding(
         padding: const EdgeInsets.all(8.0),
         child: _isLoading

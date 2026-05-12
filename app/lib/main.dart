@@ -4,7 +4,6 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'main_layout.dart';
 import 'login_screen.dart';
-import 'pinterest_screen.dart';
 import 'profile_screen.dart';
 
 // Global notifier for guest mode
