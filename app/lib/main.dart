@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'main_layout.dart';
 import 'login_screen.dart';
 import 'pinterest_screen.dart';
 import 'profile_screen.dart';
@@ -26,21 +27,19 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    const Color appleGreen = Color(0xFF9ACF7C);
+
     return MaterialApp(
       title: 'Guayana Live',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.green.shade700),
+        colorScheme: ColorScheme.fromSeed(seedColor: appleGreen),
         useMaterial3: true,
-        primaryColor: Colors.green.shade700,
-        appBarTheme: AppBarTheme(
-          backgroundColor: Colors.green.shade700,
+        primaryColor: appleGreen,
+        appBarTheme: const AppBarTheme(
+          backgroundColor: appleGreen,
           foregroundColor: Colors.white,
-          iconTheme: const IconThemeData(color: Colors.white),
-        ),
-        iconTheme: IconThemeData(color: Colors.green.shade700),
-        floatingActionButtonTheme: FloatingActionButtonThemeData(
-          backgroundColor: Colors.green.shade700,
+          iconTheme: IconThemeData(color: Colors.white),
         ),
       ),
       home: const AuthGate(),
@@ -111,7 +110,6 @@ class _AuthGateState extends State<AuthGate> {
 
   @override
   Widget build(BuildContext context) {
-    // Listen to guest mode toggles securely
     return ValueListenableBuilder<bool>(
       valueListenable: guestModeNotifier,
       builder: (context, isGuest, child) {
@@ -121,7 +119,7 @@ class _AuthGateState extends State<AuthGate> {
 
         if (_session != null && _checkingProfile) {
           return const Scaffold(
-            body: Center(child: CircularProgressIndicator(color: Colors.green)),
+            body: Center(child: CircularProgressIndicator()),
           );
         }
 
@@ -131,8 +129,7 @@ class _AuthGateState extends State<AuthGate> {
           );
         }
 
-        // If Guest OR Setup is complete, grant access to Main Feed
-        return const PinterestScreen();
+        return const MainLayout();
       },
     );
   }

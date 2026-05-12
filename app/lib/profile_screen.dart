@@ -5,7 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 
 import 'auth_modal.dart';
-import 'main.dart'; // To access guestModeNotifier
+import 'main.dart'; 
 
 class ProfileScreen extends StatefulWidget {
   final String? userId;
@@ -158,7 +158,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Widget _buildInfoField({required String label, required TextEditingController controller}) {
-    if ((!_isEditing && controller.text.isEmpty) || isGuest) return const SizedBox.shrink();
+    final bool isEditable = _isEditing || _isSetupMode;
+
+    if ((!isEditable && controller.text.isEmpty) || isGuest) return const SizedBox.shrink();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -167,10 +169,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
         const SizedBox(height: 6),
         TextField(
           controller: controller,
-          readOnly: !_isEditing,
+          readOnly: !isEditable,
           decoration: InputDecoration(
-            filled: !_isEditing ? true : false,
-            fillColor: _isEditing ? null : Colors.grey.shade100,
+            filled: !isEditable ? true : false,
+            fillColor: isEditable ? null : Colors.grey.shade100,
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(12.0), borderSide: BorderSide.none),
             contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
           ),
@@ -183,10 +185,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final primaryColor = Theme.of(context).primaryColor;
+
     final content = Scaffold(
       appBar: AppBar(
         title: Text(_isSetupMode ? 'Completa tu perfil' : (_isMyProfile ? 'Mi perfil' : 'Perfil')),
-        backgroundColor: Colors.redAccent,
         actions: [
           if (_isMyProfile)
             IconButton(
@@ -205,7 +208,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ],
       ),
       body: _isLoading && _posts.isEmpty && !_isSetupMode
-          ? const Center(child: CircularProgressIndicator(color: Colors.redAccent))
+          ? Center(child: CircularProgressIndicator(color: primaryColor))
           : SingleChildScrollView(
               child: Padding(
                 padding: const EdgeInsets.all(16.0),
@@ -237,7 +240,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             children: [
                               CircleAvatar(
                                 radius: 42,
-                                backgroundColor: Colors.redAccent.shade100,
+                                backgroundColor: primaryColor.withOpacity(0.3),
                                 backgroundImage: _avatarUrl != null ? NetworkImage(_avatarUrl!) : null,
                                 child: _avatarUrl == null 
                                     ? Text(
@@ -252,7 +255,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                   right: 0,
                                   child: Container(
                                     padding: const EdgeInsets.all(4),
-                                    decoration: const BoxDecoration(color: Colors.redAccent, shape: BoxShape.circle),
+                                    decoration: BoxDecoration(color: primaryColor, shape: BoxShape.circle),
                                     child: const Icon(Icons.camera_alt, size: 16, color: Colors.white),
                                   ),
                                 ),
@@ -281,7 +284,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                       ? () => showAuthModal(context) 
                                       : (_isEditing || _isSetupMode ? _saveProfile : () => setState(() => _isEditing = true)),
                                   style: ElevatedButton.styleFrom(
-                                    backgroundColor: Colors.redAccent,
+                                    backgroundColor: primaryColor,
                                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
                                   ),
                                   child: Text(

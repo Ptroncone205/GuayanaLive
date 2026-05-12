@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-// Helper function to show the modal from anywhere
 void showAuthModal(BuildContext context) {
   showModalBottomSheet(
     context: context,
@@ -30,11 +29,9 @@ class _AuthModalState extends State<AuthModal> {
   bool _isLoading = false;
   bool _isLogin = true; 
 
-  // Controllers for Login
   final _identifierController = TextEditingController();
   final _loginPasswordController = TextEditingController();
 
-  // Controllers for Registration
   final _regEmailController = TextEditingController();
   final _regUsernameController = TextEditingController();
   final _regPasswordController = TextEditingController();
@@ -85,7 +82,6 @@ class _AuthModalState extends State<AuthModal> {
         password: password,
       );
       
-      // If it's a bottom sheet, close it on success
       if (widget.isBottomSheet && mounted) {
         Navigator.of(context).pop();
       }
@@ -222,6 +218,8 @@ class _AuthModalState extends State<AuthModal> {
 
   @override
   Widget build(BuildContext context) {
+    final primaryColor = Theme.of(context).primaryColor;
+
     return Container(
       constraints: const BoxConstraints(maxWidth: 400),
       padding: const EdgeInsets.all(24.0),
@@ -239,7 +237,6 @@ class _AuthModalState extends State<AuthModal> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // Drag handle for bottom sheet
           if (widget.isBottomSheet)
             Center(
               child: Container(
@@ -251,7 +248,7 @@ class _AuthModalState extends State<AuthModal> {
             ),
           
           if (!widget.isBottomSheet)
-            const Icon(Icons.school, size: 64, color: Colors.redAccent),
+            Icon(Icons.school, size: 64, color: primaryColor),
             
           const SizedBox(height: 16),
           Text(
@@ -267,7 +264,7 @@ class _AuthModalState extends State<AuthModal> {
           
           ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.redAccent,
+              backgroundColor: primaryColor,
               padding: const EdgeInsets.symmetric(vertical: 16),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
             ),
@@ -284,7 +281,7 @@ class _AuthModalState extends State<AuthModal> {
             },
             child: Text(
               _isLogin ? '¿No tienes cuenta? Regístrate' : '¿Ya tienes cuenta? Inicia sesión',
-              style: const TextStyle(color: Colors.redAccent),
+              style: TextStyle(color: primaryColor),
             ),
           ),
         ],

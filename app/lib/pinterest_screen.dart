@@ -719,169 +719,169 @@ class _PinterestScreenState extends State<PinterestScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: _selectedIndex == 1 
-            ? const Text('Chat IA')
-            : (!_isSearching
-                ? const Text('Guayana Live')
-                : TextField(
-                    controller: _searchController,
-                    focusNode: _searchFocusNode,
-                    style: const TextStyle(color: Colors.white),
-                    cursorColor: Colors.white,
-                    decoration: const InputDecoration(
-                      hintText: 'Buscar publicaciones',
-                      hintStyle: TextStyle(color: Color.fromRGBO(255, 255, 255, 0.8)),
-                      border: InputBorder.none,
-                    ),
-                  )),
-        backgroundColor: Colors.green.shade700,
-        actions: _selectedIndex == 0 ? [
+        title: !_isSearching
+            ? const Text('Pinterest Style')
+            : TextField(
+                controller: _searchController,
+                focusNode: _searchFocusNode,
+                style: const TextStyle(color: Colors.white),
+                cursorColor: Colors.white,
+                decoration: InputDecoration(
+                  hintText: 'Buscar publicaciones',
+                  hintStyle: TextStyle(color: Colors.white.withOpacity(0.8)),
+                  border: InputBorder.none,
+                ),
+              ),
+        backgroundColor: Theme.of(context).primaryColor,
+        actions: [
           if (_isSearching)
             IconButton(
               icon: const Icon(Icons.close),
               onPressed: _stopSearch,
               tooltip: 'Cerrar búsqueda',
-              color: Colors.white,
             )
           else
             IconButton(
               icon: const Icon(Icons.search),
               onPressed: _startSearch,
               tooltip: 'Buscar',
-              color: Colors.white,
             ),
-        ] : [],
-      ),
-      
-      floatingActionButton: _selectedIndex == 0
-          ? FloatingActionButton(
-              onPressed: () async {
-                if (isGuest) {
-                  showAuthModal(context);
-                  return;
-                }
-                setState(() => _selectedIndex = 1);
-                
-                Future.delayed(const Duration(milliseconds: 150), () {
-                  _chatKey.currentState?.abrirCamaraDeseada();
-                });
-              },
-              backgroundColor: Colors.green.shade700,
-              tooltip: 'Escanear con IA',
-              child: const Icon(Icons.qr_code_scanner, color: Colors.white),
-            )
-          : null,
-      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
-      
-      body: Row(
-        children: [
-          Container(
-            width: 100,
-            color: Colors.green.shade50,
-            child: Column(
-              children: [
-                const SizedBox(height: 20),
-                _NavButton(
-                  icon: Icons.account_circle,
-                  label: 'Perfil',
-                  onTap: () async {
-                    await Navigator.of(context).push(
-                      MaterialPageRoute(builder: (context) => const ProfileScreen()),
-                    );
-                  },
-                ),
-                _NavButton(
-                  icon: Icons.home_filled,
-                  label: 'Feed',
-                  onTap: () {
-                    setState(() => _selectedIndex = 0);
-                    _fetchPins();
-                  },
-                ),
-                _NavButton(
-                  icon: Icons.auto_awesome,
-                  label: 'IA',
-                  onTap: () {
-                    setState(() => _selectedIndex = 1);
-                  },
-                ),
-                _NavButton(
-                  icon: Icons.cloud_upload, // Dejé el icono original de subir de la app verde
-                  label: 'Subir',
-                  onTap: () async {
-                    if (isGuest) {
-                      showAuthModal(context);
-                    } else {
-                      await _showAddPostOptions();
-                    }
-                  },
-                ),
-              ],
-            ),
-          ),
-          
-          Expanded(
-            child: IndexedStack(
-              index: _selectedIndex,
-              children: [
-                _buildFeedContent(),
-                ChatScreen(key: _chatKey),
-              ],
-            ),
-          ),
         ],
       ),
-    );
-  }
-}
-
-class _NavButton extends StatefulWidget {
-  final IconData icon;
-  final String label;
-  final VoidCallback onTap;
-
-  const _NavButton({
-    required this.icon,
-    required this.label,
-    required this.onTap,
-  });
-
-  @override
-  State<_NavButton> createState() => _NavButtonState();
-}
-
-class _NavButtonState extends State<_NavButton> {
-  bool _isHovered = false;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6.0),
-      child: MouseRegion(
-        onEnter: (_) => setState(() => _isHovered = true),
-        onExit: (_) => setState(() => _isHovered = false),
-        child: AnimatedScale(
-          duration: const Duration(milliseconds: 150),
-          scale: _isHovered ? 1.1 : 1.0,
-          child: Semantics(
-            label: widget.label,
-            button: true,
-            child: Material(
-              color: Colors.transparent,
-              child: InkWell(
-                onTap: widget.onTap,
-                borderRadius: BorderRadius.circular(16.0),
-                child: SizedBox(
-                  width: 56,
-                  height: 56,
-                  child: Center(
-                    child: Icon(widget.icon, color: Colors.green.shade700, size: 28),
+      floatingActionButton: FloatingActionButton(
+        onPressed: isGuest ? () => showAuthModal(context) : _showAddPostOptions,
+        backgroundColor: Theme.of(context).primaryColor,
+        child: const Icon(Icons.add, color: Colors.white,),
+      ),
+      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
+      
+      // ELIMINAMOS EL ROW Y EL SIDEBAR DE AQUÍ
+      body: Padding(
+        padding: const EdgeInsets.all(8.0),
+        child: _isLoading
+          ? Center(child: CircularProgressIndicator(color: Theme.of(context).primaryColor))
+          : Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (_selectedTagFilters.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 8.0),
+                    child: Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        ..._selectedTagFilters.map((tag) => FilterChip(
+                              label: Text(tag),
+                              selected: true,
+                              onSelected: (_) => _toggleTagFilter(tag),
+                            )),
+                        ActionChip(
+                          label: const Text('Borrar filtros'),
+                          onPressed: _clearTagFilters,
+                        ),
+                      ],
+                    ),
                   ),
+                Expanded(
+                  child: _filteredPins.isEmpty
+                    ? Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const Icon(Icons.image_not_supported, size: 64, color: Colors.grey),
+                            const SizedBox(height: 16),
+                            const Text('No se encontraron publicaciones.'),
+                            TextButton(
+                              onPressed: _fetchPins,
+                              child: Text('Recargar', style: TextStyle(color: Theme.of(context).primaryColor)),
+                            ),
+                          ],
+                        ),
+                      )
+                    : RefreshIndicator(
+                        onRefresh: _fetchPins,
+                        color: Theme.of(context).primaryColor,
+                        child: MasonryGridView.count(
+                            crossAxisCount: MediaQuery.of(context).size.width > 600 ? 3 : 2,
+                            mainAxisSpacing: 8.0,
+                            crossAxisSpacing: 8.0,
+                            itemCount: _filteredPins.length,
+                            itemBuilder: (context, index) {
+                              final pin = _filteredPins[index];
+                              final pinTags = List<String>.from(pin['tags'] as List? ?? []);
+
+                              return GestureDetector(
+                                onTap: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) => PinDetailScreen(pin: pin),
+                                    ),
+                                  );
+                                },
+                                child: Container(
+                                  height: (pin['height'] as num?)?.toDouble() ?? 250.0,
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(12.0),
+                                    color: Colors.grey.shade300,
+                                    image: DecorationImage(
+                                      image: NetworkImage(pin['image_url']),
+                                      fit: BoxFit.cover,
+                                    ),
+                                  ),
+                                  child: Stack(
+                                    children: [
+                                      Align(
+                                        alignment: Alignment.topLeft,
+                                        child: Container(
+                                          margin: const EdgeInsets.all(8.0),
+                                          padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
+                                          decoration: BoxDecoration(
+                                            color: Colors.black45,
+                                            borderRadius: BorderRadius.circular(12.0),
+                                          ),
+                                          child: Text(
+                                            pin['title'] ?? 'Sin título',
+                                            style: const TextStyle(color: Colors.white, fontSize: 12),
+                                          ),
+                                        ),
+                                      ),
+                                      if (pinTags.isNotEmpty)
+                                        Positioned(
+                                          left: 8,
+                                          right: 8,
+                                          bottom: 8,
+                                          child: Wrap(
+                                            spacing: 4,
+                                            runSpacing: 4,
+                                            children: pinTags.take(3).map((tag) {
+                                              return GestureDetector(
+                                                onTap: () => _toggleTagFilter(tag),
+                                                child: Container(
+                                                  padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
+                                                  decoration: BoxDecoration(
+                                                    color: Colors.black54,
+                                                    borderRadius: BorderRadius.circular(12.0),
+                                                  ),
+                                                  child: Text(
+                                                    tag,
+                                                    style: const TextStyle(color: Colors.white, fontSize: 10),
+                                                  ),
+                                                ),
+                                              );
+                                            }).toList(),
+                                          ),
+                                        ),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                      ),
                 ),
-              ),
+              ],
             ),
-          ),
-        ),
       ),
     );
   }
