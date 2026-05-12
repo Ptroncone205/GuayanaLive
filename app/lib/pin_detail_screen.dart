@@ -4,7 +4,7 @@ import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'profile_screen.dart';
-import 'auth_modal.dart'; 
+import 'services/like_chat_repository.dart';
 
 class PinDetailScreen extends StatefulWidget {
   final Map<String, dynamic> pin;
@@ -17,6 +17,7 @@ class PinDetailScreen extends StatefulWidget {
 
 class _PinDetailScreenState extends State<PinDetailScreen> {
   final _supabase = Supabase.instance.client;
+  final LikeRepository _likeRepository = InMemoryLikeRepository();
   final TextEditingController _commentController = TextEditingController();
   
   List<Map<String, dynamic>> _relatedPins = [];
@@ -83,6 +84,107 @@ class _PinDetailScreenState extends State<PinDetailScreen> {
           SnackBar(content: Text('Error al enviar comentario: $e')),
         );
       }
+    }
+  }
+
+  Future<void> _fetchLikeState() async {
+    final pinId = widget.pin['id'];
+    if (pinId == null) return;
+
+    final currentUserId = _supabase.auth.currentUser?.id;
+    final defaultLikes = widget.pin['likes_count'] ?? widget.pin['likes'] ?? 0;
+
+    try {
+      final likeState = await _likeRepository.fetchLikeState(pinId, currentUserId, defaultLikes: defaultLikes);
+      if (!mounted) return;
+      setState(() {
+        _likesCount = likeState.likesCount;
+        _isLiked = likeState.isLiked;
+      });
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _likesCount = defaultLikes;
+          _isLiked = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _toggleLike() async {
+    final pinId = widget.pin['id'];
+    final currentUserId = _supabase.auth.currentUser?.id;
+    if (pinId == null) return;
+
+    if (_isLikeLoading) return;
+    if (currentUserId == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Debes iniciar sesión para dar like.')),
+        );
+      }
+      return;
+    }
+
+    setState(() => _isLikeLoading = true);
+    final defaultLikes = widget.pin['likes_count'] ?? widget.pin['likes'] ?? 0;
+
+    try {
+      final likeState = await _likeRepository.toggleLike(pinId, currentUserId, defaultLikes: defaultLikes);
+      if (!mounted) return;
+      setState(() {
+        _likesCount = likeState.likesCount;
+        _isLiked = likeState.isLiked;
+      });
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error al actualizar like: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isLikeLoading = false);
+    }
+  }
+
+  Future<void> _saveImageToGallery() async {
+    final imageUrl = widget.pin['image_url'] ?? '';
+    if (imageUrl.isEmpty) return;
+
+    if (kIsWeb) {
+      final uri = Uri.parse(imageUrl);
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('No se pudo abrir la imagen para descargar')),
+          );
+        }
+      }
+      return;
+    }
+
+    if (_isSavingImage) return;
+    setState(() => _isSavingImage = true);
+
+    try {
+      final response = await http.get(Uri.parse(imageUrl));
+      if (response.statusCode == 200) {
+        await ImageGallerySaver.saveImage(
+          response.bodyBytes,
+          name: "GuayanaLive_${DateTime.now().millisecondsSinceEpoch}",
+        );
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('¡Imagen guardada en tu galería!')),
+          );
+        }
+      }
+    } catch (e) {
+      debugPrint("Error save image: $e");
+    } finally {
+      if (mounted) setState(() => _isSavingImage = false);
     }
   }
 
