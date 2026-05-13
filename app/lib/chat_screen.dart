@@ -303,18 +303,15 @@ class ChatScreenState extends State<ChatScreen> {
     final avatar = CircleAvatar(
       radius: 16,
       backgroundColor: isUser ? Colors.green.shade700 : Colors.green.shade900,
-      backgroundImage:
-          isUser && _userAvatarUrl != null && _userAvatarUrl!.isNotEmpty
-          ? NetworkImage(_userAvatarUrl!) as ImageProvider
-          : (!isUser ? const AssetImage('assets/ia_profile.png') : null),
-      child:
-          (isUser && (_userAvatarUrl == null || _userAvatarUrl!.isEmpty)) ||
-              (!isUser && _userAvatarUrl == null)
-          ? Icon(
-              isUser ? Icons.person : Icons.auto_awesome,
-              size: 16,
-              color: Colors.white,
-            )
+
+      backgroundImage: isUser
+          ? (_userAvatarUrl != null && _userAvatarUrl!.isNotEmpty
+                ? NetworkImage(_userAvatarUrl!)
+                : null)
+          : const AssetImage('assets/ia_profile.png'),
+
+      child: isUser && (_userAvatarUrl == null || _userAvatarUrl!.isEmpty)
+          ? const Icon(Icons.person, size: 16, color: Colors.white)
           : null,
     );
 
