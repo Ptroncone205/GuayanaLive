@@ -9,6 +9,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'camera_screen.dart';
 import 'services/groq_service.dart';
+import 'auth_modal.dart'; // Importación añadida para mostrar el modal
 
 class ChatScreen extends StatefulWidget {
   /// If provided, this image will be pre-loaded as a pending attachment
@@ -45,6 +46,11 @@ class ChatScreenState extends State<ChatScreen> {
   bool _isLoading = false;
   String? _pendingImagePath;
   String? _userAvatarUrl;
+
+  // --- VARIABLES ESTÁTICAS PARA LÍMITES DE INVITADO ---
+  // Estáticas para que el conteo no se borre si el usuario cambia de pestaña
+  static int _guestTextCount = 0;
+  static int _guestScanCount = 0;
 
   final List<ChatMessage> _messages = [
     ChatMessage(
@@ -126,6 +132,27 @@ class ChatScreenState extends State<ChatScreen> {
     final text = _messageController.text.trim();
     if ((text.isEmpty && _pendingImagePath == null) || _isLoading) return;
 
+    // --- VERIFICACIÓN DE LÍMITES PARA INVITADOS ---
+    bool isGuest = _supabase.auth.currentUser == null;
+    if (isGuest) {
+      if (_pendingImagePath != null) {
+        // Intenta analizar una imagen
+        if (_guestScanCount >= 1) {
+          showAuthModal(context);
+          return; // Bloquea el envío
+        }
+        _guestScanCount++; // Consume su único intento
+      } else {
+        // Intenta enviar mensaje de texto normal
+        if (_guestTextCount >= 3) {
+          showAuthModal(context);
+          return; // Bloquea el envío
+        }
+        _guestTextCount++; // Consume uno de sus 3 intentos
+      }
+    }
+    // ----------------------------------------------
+
     final sendText = text.isNotEmpty ? text : 'Analiza esta imagen.';
 
     if (_pendingImagePath != null) {
@@ -166,12 +193,14 @@ class ChatScreenState extends State<ChatScreen> {
         imageBytes = await XFile(imagePath).readAsBytes();
       }
       final history = _messages
-      .where((m) => m.text != 'Escribiendo...')
-      .map((m) => {
-            'role': m.sender == 'user' ? 'user' : 'assistant',
-            'content': m.text,
-          })
-      .toList();
+          .where((m) => m.text != 'Escribiendo...')
+          .map(
+            (m) => {
+              'role': m.sender == 'user' ? 'user' : 'assistant',
+              'content': m.text,
+            },
+          )
+          .toList();
       // --- LLAMADA AL SERVICIO DE GROQ ---
       final aiReply = await _groqService.getChatResponse(
         userText,

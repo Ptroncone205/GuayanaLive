@@ -7,7 +7,7 @@ import 'login_screen.dart';
 import 'profile_screen.dart';
 
 // Global notifier for guest mode
-final ValueNotifier<bool> guestModeNotifier = ValueNotifier(false);
+final ValueNotifier<bool> guestModeNotifier = ValueNotifier(true);
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -62,7 +62,7 @@ class _AuthGateState extends State<AuthGate> {
     super.initState();
     _session = Supabase.instance.client.auth.currentSession;
     _checkProfileStatus();
-    
+
     Supabase.instance.client.auth.onAuthStateChange.listen((data) {
       if (mounted) {
         setState(() {
@@ -93,9 +93,10 @@ class _AuthGateState extends State<AuthGate> {
       if (mounted) {
         setState(() {
           final fullName = data?['full_name'] as String?;
-          _profileComplete = fullName != null && 
-                             fullName.trim().isNotEmpty && 
-                             fullName.trim().toLowerCase() != 'usuario';
+          _profileComplete =
+              fullName != null &&
+              fullName.trim().isNotEmpty &&
+              fullName.trim().toLowerCase() != 'usuario';
           _checkingProfile = false;
         });
       }
@@ -122,9 +123,7 @@ class _AuthGateState extends State<AuthGate> {
         }
 
         if (_session != null && !_profileComplete) {
-          return ProfileScreen(
-            onSetupComplete: _checkProfileStatus,
-          );
+          return ProfileScreen(onSetupComplete: _checkProfileStatus);
         }
 
         return const MainLayout();

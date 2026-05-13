@@ -915,7 +915,10 @@ class PinterestScreenState extends State<PinterestScreen> {
                                 final ownerProfile =
                                     pin['profiles'] as Map<String, dynamic>?;
 
-                                final maxTags = MediaQuery.of(context).size.width > 1100 ? 4 : 2;
+                                final maxTags =
+                                    MediaQuery.of(context).size.width > 1100
+                                    ? 4
+                                    : 2;
                                 final double width =
                                     (pin['width'] as num?)?.toDouble() ?? 0;
                                 final double height =
@@ -1027,7 +1030,8 @@ class PinterestScreenState extends State<PinterestScreen> {
                                                           MainAxisSize.min,
                                                       children: [
                                                         ...List.generate(
-                                                          pinTags.length > maxTags
+                                                          pinTags.length >
+                                                                  maxTags
                                                               ? maxTags
                                                               : pinTags.length,
                                                           (index) => Padding(
