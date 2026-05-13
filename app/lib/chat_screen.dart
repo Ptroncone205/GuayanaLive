@@ -165,11 +165,18 @@ class ChatScreenState extends State<ChatScreen> {
       if (imagePath != null) {
         imageBytes = await XFile(imagePath).readAsBytes();
       }
-
+      final history = _messages
+      .where((m) => m.text != 'Escribiendo...')
+      .map((m) => {
+            'role': m.sender == 'user' ? 'user' : 'assistant',
+            'content': m.text,
+          })
+      .toList();
       // --- LLAMADA AL SERVICIO DE GROQ ---
       final aiReply = await _groqService.getChatResponse(
         userText,
         imageBytes: imageBytes,
+        history: history,
       );
 
       if (!mounted) return;

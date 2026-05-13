@@ -1,138 +1,110 @@
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
-import 'package:http/http.dart' as http;
-
-import '../config.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class GroqService {
-  final String _apiKey = groqApiKey;
-  final String _url = 'https://api.groq.com/openai/v1/chat/completions';
-
-  // --- AQUÍ ESTÁ LA MAGIA DE LA MEMORIA ---
-  // Esta lista guardará toda la conversación actual
+  // Conversación persistente actual
   final List<Map<String, dynamic>> _chatHistory = [];
 
-  // Método extra por si algún día quieres poner un botón de "Limpiar Chat"
+  // Limpiar memoria del chat
   void clearChat() {
     _chatHistory.clear();
   }
-  // ----------------------------------------
 
-  Future<String> getChatResponse(String userMessage, {Uint8List? imageBytes}) async {
-    if (_apiKey.isEmpty) {
-      throw Exception('La clave de Groq no está configurada. Usa GROQ_API_KEY.');
-    }
-
-    final userPrompt = userMessage.isNotEmpty ? userMessage : 'Analiza esta imagen.';
-
-    const systemInstruction =
-        'Eres un asistente de IA para GuayanaLive, eres una representacion de la profesora de la UCAB Florencia, experta en biodiversidad, ecologia, y sustentabilidad una red social visual tipo Pinterest y INaturalist enfocada en la región Guayana, Venezuela. '
-        'Responde en español o ingles depende de cual lenguaje use el usuario de forma directa y precisa. '
-        'No agregues información innecesaria ni explicaciones largas. '
-        'Atiende exactamente lo que pide el usuario. '
-        'Si la solicitud se sale del tema de biodiversidad, hazle saber al usuario que no lo puedes ayudar con eso, y solo puedes ayudar con preguntas relacionadas a la biodiversidad, busqueda de informacion de la misma, o escaneo de especies, dile un mensaje breve al usuario. '
-        'Si hay una imagen, identifícala si es una especie de flora o fauna de la región, si no, dile al usuario que no lo puedes ayudar ya que la imagen no tiene relacion al tema.';
-
-    final List<Map<String, dynamic>> currentUserContent = [
-      {
-        'type': 'text',
-        'text': userPrompt,
-      },
-    ];
-
-    if (imageBytes != null && imageBytes.isNotEmpty) {
-      try {
-        final base64Image = base64Encode(imageBytes);
-        currentUserContent.add({
-          'type': 'image_url',
-          'image_url': {
-            'url': 'data:image/jpeg;base64,$base64Image',
-          },
-        });
-      } catch (e) {
-        debugPrint('Error al convertir imagen a Base64: $e');
-      }
-    }
-
-    // 1. GUARDAMOS LO QUE EL USUARIO ACABA DE DECIR EN LA MEMORIA
-    _chatHistory.add({
-      'role': 'user',
-      'content': currentUserContent,
-    });
-
-    // 2. ARMAMOS EL PAQUETE CON LA INSTRUCCIÓN DEL SISTEMA + TODO EL HISTORIAL
-    // Los tres puntos (...) "expanden" la lista de la memoria aquí dentro.
-    final List<Map<String, dynamic>> messagesToSend = [
-      {
-        'role': 'system',
-        'content': systemInstruction,
-      },
-      ..._chatHistory, 
-    ];
+  Future<String> getChatResponse(
+    String userMessage, {
+    Uint8List? imageBytes,
+    List<Map<String, dynamic>> history = const [],
+  }) async {
+    final userPrompt =
+        userMessage.isNotEmpty ? userMessage : 'Analiza esta imagen.';
 
     try {
-      final response = await http.post(
-        Uri.parse(_url),
-        headers: {
-          'Authorization': 'Bearer $_apiKey',
-          'Content-Type': 'application/json',
+      String? imageBase64;
+
+      // Convertir imagen a base64 si existe
+      if (imageBytes != null && imageBytes.isNotEmpty) {
+        imageBase64 = base64Encode(imageBytes);
+      }
+
+      // Guardar mensaje del usuario en memoria
+      _chatHistory.add({
+        'role': 'user',
+        'content': userPrompt,
+      });
+
+      // Llamar Edge Function
+      final response = await Supabase.instance.client.functions.invoke(
+        'ai_proxy',
+        body: {
+          'prompt': userPrompt,
+          'imageBase64': imageBase64,
+          'history': _chatHistory,
         },
-        body: jsonEncode({
-          'model': 'meta-llama/llama-4-scout-17b-16e-instruct',
-          'messages': messagesToSend, // Mandamos el paquete completo
-          'temperature': 0.3,
-          'max_tokens': 900,
-        }),
       );
 
-      if (response.statusCode == 200) {
-        final data = jsonDecode(utf8.decode(response.bodyBytes));
-        final botResponse = data['choices']?[0]?['message']?['content'];
-        
-        if (botResponse == null) {
-          throw Exception('Respuesta inválida de Groq.');
-        }
+      final data = response.data;
 
-        final finalResponse = botResponse.trim();
-
-        // 3. GUARDAMOS LO QUE LA IA RESPONDIÓ EN LA MEMORIA PARA LA PRÓXIMA
-        _chatHistory.add({
-          'role': 'assistant',
-          'content': finalResponse, // El asistente responde en texto simple
-        });
-
-        return finalResponse;
+      if (data == null) {
+        throw Exception('La función no devolvió datos.');
       }
 
-      // Si Groq da error, borramos el último mensaje nuestro de la memoria 
-      // para que no se tranque si intentamos reenviarlo.
-      _chatHistory.removeLast();
-      
-      final errorData = jsonDecode(response.body);
-      final errorMessage = errorData['error']?['message'] ?? response.body;
-      throw Exception('Error de Groq (${response.statusCode}): $errorMessage');
+      if (data['error'] != null) {
+        throw Exception(data['error']);
+      }
+
+      final reply = data['reply'];
+
+      if (reply == null) {
+        throw Exception('La IA devolvió una respuesta vacía.');
+      }
+
+      final finalResponse = reply.toString().trim();
+
+      // Guardar respuesta IA en memoria
+      _chatHistory.add({
+        'role': 'assistant',
+        'content': finalResponse,
+      });
+
+      return finalResponse;
     } catch (e, st) {
-      // Manejo de errores de red (quitar el mensaje fallido)
-      if (_chatHistory.isNotEmpty && _chatHistory.last['role'] == 'user') {
+      // Remover último user message si falla
+      if (_chatHistory.isNotEmpty &&
+          _chatHistory.last['role'] == 'user') {
         _chatHistory.removeLast();
       }
-      debugPrint('Groq service error: $e');
+
+      debugPrint('AI ERROR: $e');
       debugPrint(st.toString());
+
       return 'Error al conectar con la IA: $e';
     }
   }
-  // --- NUEVO MÉTODO PARA AUTOCOMPLETADO DE PUBLICACIONES ---
-Future<Map<String, dynamic>> getAutoFillData(Uint8List imageBytes) async {
-    // Instrucción estricta para que la IA responda como queremos
-    const prompt = 'Devuelve ÚNICAMENTE un objeto JSON con dos campos: "titulo" (un título descriptivo corto) y "tags" (una lista de 3 a 5 palabras clave relevantes). Ejemplo: {"titulo": "Rana de cristal", "tags": ["rana", "anfibio", "selva"]}. No escribas absolutamente nada más fuera del JSON ni uses markdown.';
-    
-    // ¡Usamos exactamente tu proceso actual del chat!
-    final respuestaIA = await getChatResponse(prompt, imageBytes: imageBytes);
 
-    // Limpiamos la respuesta por si la IA le pone formato de código y la convertimos
-    final cleanJsonString = respuestaIA.replaceAll(RegExp(r'```json|```'), '').trim();
-    
-    return jsonDecode(cleanJsonString);
+  // AUTOFILL PARA POSTS
+  Future<Map<String, dynamic>> getAutoFillData(
+    Uint8List imageBytes,
+  ) async {
+    const prompt =
+        'Devuelve ÚNICAMENTE un objeto JSON con dos campos: '
+        '"titulo" (un título descriptivo corto) y '
+        '"tags" (una lista de 3 a 5 palabras clave relevantes). '
+        'Ejemplo: '
+        '{"titulo":"Rana de cristal","tags":["rana","anfibio","selva"]}. '
+        'No escribas nada fuera del JSON.';
+
+    final aiResponse = await getChatResponse(
+      prompt,
+      imageBytes: imageBytes,
+    );
+
+    final cleanJson = aiResponse
+        .replaceAll(RegExp(r'```json|```'), '')
+        .trim();
+
+    return jsonDecode(cleanJson);
   }
 }
