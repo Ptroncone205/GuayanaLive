@@ -8,10 +8,14 @@ import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'camera_screen.dart';
-// Eliminado: import 'services/groq_service.dart';
+import 'services/groq_service.dart';
 
 class ChatScreen extends StatefulWidget {
-  const ChatScreen({super.key});
+  /// If provided, this image will be pre-loaded as a pending attachment
+  /// so the user can type a message before sending it to the AI.
+  final String? initialImagePath;
+
+  const ChatScreen({super.key, this.initialImagePath});
 
   @override
   State<ChatScreen> createState() => ChatScreenState();
@@ -36,6 +40,7 @@ class ChatScreenState extends State<ChatScreen> {
   final ScrollController _scrollController = ScrollController();
   final ImagePicker _picker = ImagePicker();
   final SupabaseClient _supabase = Supabase.instance.client;
+  final GroqService _groqService = GroqService();
 
   bool _isLoading = false;
   String? _pendingImagePath;
@@ -54,6 +59,10 @@ class ChatScreenState extends State<ChatScreen> {
   void initState() {
     super.initState();
     _loadUserAvatar();
+    // Pre-load an image from the camera flow without auto-sending
+    if (widget.initialImagePath != null) {
+      _pendingImagePath = widget.initialImagePath;
+    }
   }
 
   @override
@@ -61,6 +70,12 @@ class ChatScreenState extends State<ChatScreen> {
     _messageController.dispose();
     _scrollController.dispose();
     super.dispose();
+  }
+
+  void setPendingImage(String path) {
+    setState(() {
+      _pendingImagePath = path;
+    });
   }
 
   void abrirCamaraDeseada() {
@@ -145,25 +160,17 @@ class ChatScreenState extends State<ChatScreen> {
     );
 
     try {
-      String? base64Image;
+      Uint8List? imageBytes;
 
       if (imagePath != null) {
-        final imageBytes = await XFile(imagePath).readAsBytes();
-        base64Image = base64Encode(imageBytes);
+        imageBytes = await XFile(imagePath).readAsBytes();
       }
 
-      // --- LLAMADA A SUPABASE EDGE FUNCTION ---
-      final response = await _supabase.functions.invoke(
-        'ai_proxy',
-        body: {
-          'prompt': userText,
-          if (base64Image != null) 'imageBase64': base64Image,
-        },
+      // --- LLAMADA AL SERVICIO DE GROQ ---
+      final aiReply = await _groqService.getChatResponse(
+        userText,
+        imageBytes: imageBytes,
       );
-
-      final data = response.data;
-      final aiReply =
-          data['reply'] ?? 'Lo siento, no pude procesar la respuesta.';
 
       if (!mounted) return;
 
@@ -263,13 +270,6 @@ class ChatScreenState extends State<ChatScreen> {
       setState(() {
         _pendingImagePath = pickedFile.path;
       });
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Imagen lista para enviar. Escribe tu mensaje y presiona enviar.',
-          ),
-        ),
-      );
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -279,20 +279,13 @@ class ChatScreenState extends State<ChatScreen> {
   }
 
   Future<void> _openCamera() async {
-    final imagePath = await Navigator.of(context).push<String>(
+    final result = await Navigator.of(context).push<CameraResult>(
       MaterialPageRoute(builder: (context) => const CameraScreen()),
     );
-    if (imagePath == null || !mounted) return;
+    if (result == null || !mounted) return;
     setState(() {
-      _pendingImagePath = imagePath;
+      _pendingImagePath = result.imagePath;
     });
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text(
-          'Imagen lista para enviar. Escribe tu mensaje y presiona enviar.',
-        ),
-      ),
-    );
   }
 
   Widget _buildMessage(ChatMessage message) {

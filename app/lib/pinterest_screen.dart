@@ -753,13 +753,21 @@ class PinterestScreenState extends State<PinterestScreen> {
   }
 
   Future<void> _openCameraScreen() async {
-    final imagePath = await Navigator.of(context).push<String>(
+    final result = await Navigator.of(context).push<CameraResult>(
       MaterialPageRoute(builder: (context) => const CameraScreen()),
     );
 
-    if (imagePath != null && mounted) {
-      await _showUploadDialog(XFile(imagePath), isFromCamera: true);
+    if (result != null && mounted && result.action == CameraAction.post) {
+      await _showUploadDialog(XFile(result.imagePath), isFromCamera: true);
     }
+    // CameraAction.scanAI is handled in main_layout.dart
+  }
+
+  /// Called from MainLayout's FAB when the user chose "Publicar" after
+  /// taking a photo with the dedicated camera button on the Home Feed.
+  Future<void> showUploadFromCameraResult(String imagePath) async {
+    if (!mounted) return;
+    await _showUploadDialog(XFile(imagePath), isFromCamera: true);
   }
 
   void _filterPins(String query) {

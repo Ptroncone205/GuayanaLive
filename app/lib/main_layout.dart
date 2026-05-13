@@ -13,6 +13,7 @@ import 'map_screen.dart'; // Tu nueva pantalla de mapa
 
 final GlobalKey<PinterestScreenState> pinterestKey =
     GlobalKey<PinterestScreenState>();
+final GlobalKey<ChatScreenState> chatKey = GlobalKey<ChatScreenState>();
 
 class MainLayout extends StatefulWidget {
   const MainLayout({super.key});
@@ -29,7 +30,7 @@ class _MainLayoutState extends State<MainLayout> {
   // The persistent screens in our stack (AQUÍ ESTÁ EL MAPA AÑADIDO)
   final List<Widget> _screens = [
     PinterestScreen(key: pinterestKey), // Stack Index 0
-    const ChatScreen(), // Stack Index 1
+    ChatScreen(key: chatKey), // Stack Index 1
     const MapScreen(), // Stack Index 2 (Nueva pantalla del mapa)
     const UserChatScreen(), // Stack Index 3
     const ProfileScreen(), // Stack Index 4
@@ -141,11 +142,22 @@ class _MainLayoutState extends State<MainLayout> {
                 borderRadius: BorderRadius.circular(16),
               ),
               elevation: 4,
-              onPressed: () {
-                Navigator.push(
-                  context,
+              onPressed: () async {
+                final nav = Navigator.of(context);
+                final result = await nav.push<CameraResult>(
                   MaterialPageRoute(builder: (_) => const CameraScreen()),
                 );
+                if (result == null || !mounted) return;
+
+                if (result.action == CameraAction.scanAI) {
+                  // Switch to AI Chat tab and update the existing screen with the image
+                  setState(() => _selectedIndex = 1);
+                  chatKey.currentState?.setPendingImage(result.imagePath);
+                } else {
+                  // Trigger the full post publication flow (location check included)
+                  await pinterestKey.currentState
+                      ?.showUploadFromCameraResult(result.imagePath);
+                }
               },
               child: const Icon(Icons.camera_alt, size: 28),
             )
@@ -166,8 +178,8 @@ class _MainLayoutState extends State<MainLayout> {
           _AnimatedNavButton(
             icon: _buildProfileNavIcon(),
             activeIcon: _buildProfileNavIcon(isActive: true),
-            isSelected: _selectedIndex == 4,
-            onTap: () => _onItemTapped(4),
+            isSelected: _selectedIndex == 5,
+            onTap: () => _onItemTapped(5),
           ),
           _AnimatedNavButton(
             icon: const Icon(Icons.home_outlined),
@@ -182,8 +194,8 @@ class _MainLayoutState extends State<MainLayout> {
             onTap: () => _onItemTapped(1),
           ),
           _AnimatedNavButton(
-            icon: Icons.map_outlined,
-            activeIcon: Icons.map,
+            icon: const Icon(Icons.map_outlined),
+            activeIcon: const Icon(Icons.map),
             isSelected: _selectedIndex == 3, // El mapa es el 3
             onTap: () => _onItemTapped(3),
           ),
