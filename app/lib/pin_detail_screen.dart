@@ -545,11 +545,26 @@ Widget _buildDetailsAndComments({required bool isDesktop}) {
                   // ... (Mantenemos el mismo itemBuilder de comentarios que tenías)
                   final commenterProfile = comment['profiles'] as Map<String, dynamic>?;
                   final commenterName = commenterProfile?['username'] ?? 'Usuario';
+                  final commenterId = _supabase.auth.currentUser?.id;
+                  final isMyComment = !isGuest && _supabase.auth.currentUser?.id == commenterId;
+
                   return ListTile(
                     contentPadding: EdgeInsets.zero,
                     leading: CircleAvatar(radius: 14, backgroundImage: commenterProfile?['avatar_url'] != null ? NetworkImage(commenterProfile?['avatar_url']) : null),
                     title: Text(commenterName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
                     subtitle: Text(comment['text'] ?? ''),
+                    trailing: isMyComment
+                      ? IconButton(
+                          icon: const Icon(
+                            Icons.delete_outline,
+                            size: 18,
+                            color: Colors.grey,
+                          ),
+                          onPressed: () => _deleteComment(comment['id']),
+                          constraints: const BoxConstraints(),
+                          padding: EdgeInsets.zero,
+                        )
+                      : null,
                   );
                 },
               ),
