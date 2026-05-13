@@ -545,8 +545,8 @@ Widget _buildDetailsAndComments({required bool isDesktop}) {
                   // ... (Mantenemos el mismo itemBuilder de comentarios que tenías)
                   final commenterProfile = comment['profiles'] as Map<String, dynamic>?;
                   final commenterName = commenterProfile?['username'] ?? 'Usuario';
-                  final commenterId = _supabase.auth.currentUser?.id;
-                  final isMyComment = !isGuest && _supabase.auth.currentUser?.id == commenterId;
+                  final currentUserId = _supabase.auth.currentUser?.id;
+                  final isMyComment = currentUserId != null && comment['user_id'] == currentUserId;
 
                   return ListTile(
                     contentPadding: EdgeInsets.zero,
