@@ -11,7 +11,7 @@ serve(async (req) => {
   }
 
   try {
-    const { prompt, imageBase64 } = await req.json()
+    const { prompt, imageBase64, history = [] } = await req.json()
     const apiKey = Deno.env.get('AI_API_KEY') 
     
     // Retrieve the prompt you just set via the CLI
@@ -46,9 +46,13 @@ serve(async (req) => {
         model: model,
         messages: [
           { role: "system", content: systemPrompt },
-          { role: "user", content: content }
+          ...history,
+          {
+            role: "user",
+            content: content,
+          },
         ],
-        temperature: 0.5, // Lower temperature for more precise, less "chatty" answers
+        temperature: 0.5,
       }),
     })
 

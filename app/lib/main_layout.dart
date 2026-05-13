@@ -166,39 +166,39 @@ class _MainLayoutState extends State<MainLayout> {
           _AnimatedNavButton(
             icon: _buildProfileNavIcon(),
             activeIcon: _buildProfileNavIcon(isActive: true),
-            isSelected: _selectedIndex == 4,
-            onTap: () => _onItemTapped(4),
+            isSelected: _selectedIndex == 5,
+            onTap: () => _onItemTapped(5),
           ),
           _AnimatedNavButton(
-            icon: const Icon(Icons.home_outlined),
-            activeIcon: const Icon(Icons.home),
+            icon: const Icon(Icons.home_outlined, color: Colors.white),
+            activeIcon: const Icon(Icons.home, color: Colors.white),
             isSelected: _selectedIndex == 0,
             onTap: () => _onItemTapped(0),
           ),
           _AnimatedNavButton(
-            icon: const Icon(Icons.auto_awesome_outlined),
-            activeIcon: const Icon(Icons.auto_awesome),
+            icon: const Icon(Icons.auto_awesome_outlined, color: Colors.white),
+            activeIcon: const Icon(Icons.auto_awesome, color: Colors.white),
             isSelected: _selectedIndex == 1,
             onTap: () => _onItemTapped(1),
           ),
           _AnimatedNavButton(
-            icon: Icons.map_outlined,
-            activeIcon: Icons.map,
+            icon: const Icon(Icons.map_outlined, color: Colors.white),
+            activeIcon: const Icon(Icons.map, color: Colors.white),
             isSelected: _selectedIndex == 3, // El mapa es el 3
             onTap: () => _onItemTapped(3),
           ),
 
           _AnimatedNavButton(
-            icon: const Icon(Icons.chat_bubble_outline),
-            activeIcon: const Icon(Icons.chat_bubble),
+            icon: const Icon(Icons.textsms_outlined, color: Colors.white),
+            activeIcon: const Icon(Icons.textsms, color: Colors.white),
             isSelected: _selectedIndex == 4,
             onTap: () => _onItemTapped(4),
           ),
 
           const Spacer(),
           _AnimatedNavButton(
-            icon: const Icon(Icons.add_box_outlined),
-            activeIcon: const Icon(Icons.add_box),
+            icon: const Icon(Icons.add_box_outlined, color: Colors.white),
+            activeIcon: const Icon(Icons.add_box, color: Colors.white),
             isSelected: false,
             onTap: () =>
                 _onItemTapped(2), // Añadir sigue siendo el 2 (no cambia estado)
@@ -234,28 +234,28 @@ class _MainLayoutState extends State<MainLayout> {
         // Detailed labels for improved developer readability
         items: [
           const BottomNavigationBarItem(
-            icon: Icon(Icons.home_outlined),
-            activeIcon: Icon(Icons.home),
+            icon: Icon(Icons.home_outlined, color: Colors.white),
+            activeIcon: Icon(Icons.home, color: Colors.white),
             label: 'Home Feed', // Índice 0
           ),
           const BottomNavigationBarItem(
-            icon: Icon(Icons.auto_awesome_outlined),
-            activeIcon: Icon(Icons.auto_awesome),
+            icon: Icon(Icons.auto_awesome_outlined, color: Colors.white),
+            activeIcon: Icon(Icons.auto_awesome, color: Colors.white),
             label: 'AI Chat', // Índice 1
           ),
           const BottomNavigationBarItem(
-            icon: Icon(Icons.add_box_outlined),
-            activeIcon: Icon(Icons.add_box),
+            icon: Icon(Icons.add_box_outlined, color: Colors.white),
+            activeIcon: Icon(Icons.add_box, color: Colors.white),
             label: 'Add New Post', // Índice 2
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.map_outlined),
-            activeIcon: Icon(Icons.map),
+            icon: Icon(Icons.map_outlined, color: Colors.white),
+            activeIcon: Icon(Icons.map, color: Colors.white),
             label: 'Map', // Índice 3
           ),
           const BottomNavigationBarItem(
-            icon: Icon(Icons.chat_bubble_outline),
-            activeIcon: Icon(Icons.chat_bubble),
+            icon: Icon(Icons.chat_bubble_outline, color: Colors.white),
+            activeIcon: Icon(Icons.chat_bubble, color: Colors.white),
             label: 'User Messages', // Índice 4
           ),
           BottomNavigationBarItem(
