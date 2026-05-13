@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -19,6 +21,8 @@ class MainLayout extends StatefulWidget {
 
 class _MainLayoutState extends State<MainLayout> {
   int _selectedIndex = 0;
+  String? _profileAvatarUrl;
+  late final StreamSubscription<dynamic> _authSubscription;
 
   // The persistent screens in our stack
   final List<Widget> _screens = [
@@ -36,6 +40,51 @@ class _MainLayoutState extends State<MainLayout> {
       case 3: return 2; // User Chat
       case 4: return 3; // Profile
       default: return 0;
+    }
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUserAvatar();
+    _authSubscription = Supabase.instance.client.auth.onAuthStateChange.listen((_) {
+      if (mounted) {
+        _loadUserAvatar();
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _authSubscription.cancel();
+    super.dispose();
+  }
+
+  Future<void> _loadUserAvatar() async {
+    final user = Supabase.instance.client.auth.currentUser;
+    if (user == null) {
+      if (_profileAvatarUrl != null) {
+        setState(() => _profileAvatarUrl = null);
+      }
+      return;
+    }
+
+    try {
+      final profile = await Supabase.instance.client
+          .from('profiles')
+          .select('avatar_url')
+          .eq('id', user.id)
+          .maybeSingle();
+      final avatarUrl = profile?['avatar_url'] as String?;
+      if (mounted) {
+        setState(() {
+          _profileAvatarUrl = (avatarUrl != null && avatarUrl.isNotEmpty) ? avatarUrl : null;
+        });
+      }
+    } catch (_) {
+      if (mounted && _profileAvatarUrl != null) {
+        setState(() => _profileAvatarUrl = null);
+      }
     }
   }
 
@@ -99,33 +148,33 @@ class _MainLayoutState extends State<MainLayout> {
         children: [
           const SizedBox(height: 20),
           _AnimatedNavButton(
-            icon: Icons.person_outlined,
-            activeIcon: Icons.person,
+            icon: _buildProfileNavIcon(),
+            activeIcon: _buildProfileNavIcon(isActive: true),
             isSelected: _selectedIndex == 4,
             onTap: () => _onItemTapped(4),
           ),
           _AnimatedNavButton(
-            icon: Icons.home_outlined,
-            activeIcon: Icons.home,
+            icon: const Icon(Icons.home_outlined),
+            activeIcon: const Icon(Icons.home),
             isSelected: _selectedIndex == 0,
             onTap: () => _onItemTapped(0),
           ),
           _AnimatedNavButton(
-            icon: Icons.auto_awesome_outlined,
-            activeIcon: Icons.auto_awesome,
+            icon: const Icon(Icons.auto_awesome_outlined),
+            activeIcon: const Icon(Icons.auto_awesome),
             isSelected: _selectedIndex == 1,
             onTap: () => _onItemTapped(1),
           ),
           _AnimatedNavButton(
-            icon: Icons.chat_bubble_outline,
-            activeIcon: Icons.chat_bubble,
+            icon: const Icon(Icons.chat_bubble_outline),
+            activeIcon: const Icon(Icons.chat_bubble),
             isSelected: _selectedIndex == 3,
             onTap: () => _onItemTapped(3),
           ),
           const Spacer(),
           _AnimatedNavButton(
-            icon: Icons.add_box_outlined,
-            activeIcon: Icons.add_box,
+            icon: const Icon(Icons.add_box_outlined),
+            activeIcon: const Icon(Icons.add_box),
             isSelected: false,
             onTap: () => _onItemTapped(2),
           ),
@@ -156,41 +205,56 @@ class _MainLayoutState extends State<MainLayout> {
         unselectedItemColor: Colors.white70,
         iconSize: 28,
         // Detailed labels for improved developer readability
-        items: const [
-          BottomNavigationBarItem(
+        items: [
+          const BottomNavigationBarItem(
             icon: Icon(Icons.home_outlined),
             activeIcon: Icon(Icons.home),
             label: 'Home Feed',
           ),
-          BottomNavigationBarItem(
+          const BottomNavigationBarItem(
             icon: Icon(Icons.auto_awesome_outlined),
             activeIcon: Icon(Icons.auto_awesome),
             label: 'AI Chat',
           ),
-          BottomNavigationBarItem(
+          const BottomNavigationBarItem(
             icon: Icon(Icons.add_box_outlined),
             activeIcon: Icon(Icons.add_box),
             label: 'Add New Post',
           ),
-          BottomNavigationBarItem(
+          const BottomNavigationBarItem(
             icon: Icon(Icons.chat_bubble_outline),
             activeIcon: Icon(Icons.chat_bubble),
             label: 'User Messages',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.person_outline),
-            activeIcon: Icon(Icons.person),
+            icon: _buildProfileNavIcon(),
+            activeIcon: _buildProfileNavIcon(isActive: true),
             label: 'Profile',
           ),
         ],
       ),
     );
   }
+
+  Widget _buildProfileNavIcon({bool isActive = false}) {
+    if (_profileAvatarUrl != null) {
+      return CircleAvatar(
+        radius: 14,
+        backgroundImage: NetworkImage(_profileAvatarUrl!),
+      );
+    }
+
+    return Icon(
+      isActive ? Icons.person : Icons.person_outline,
+      size: 24,
+      color: Colors.white,
+    );
+  }
 }
 
 class _AnimatedNavButton extends StatelessWidget {
-  final IconData icon;
-  final IconData activeIcon;
+  final Widget icon;
+  final Widget activeIcon;
   final bool isSelected;
   final VoidCallback onTap;
 
@@ -211,10 +275,12 @@ class _AnimatedNavButton extends StatelessWidget {
         child: AnimatedScale(
           scale: isSelected ? 1.15 : 1.0,
           duration: const Duration(milliseconds: 250),
-          child: Icon(
-            isSelected ? activeIcon : icon,
-            color: Colors.white,
-            size: 30, 
+          child: SizedBox(
+            width: 32,
+            height: 32,
+            child: Center(
+              child: isSelected ? activeIcon : icon,
+            ),
           ),
         ),
       ),

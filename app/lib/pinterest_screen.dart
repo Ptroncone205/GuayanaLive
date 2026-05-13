@@ -602,6 +602,8 @@ class PinterestScreenState extends State<PinterestScreen> {
                             itemBuilder: (context, index) {
                               final pin = _filteredPins[index];
                               final pinTags = List<String>.from(pin['tags'] as List? ?? []);
+                              final ownerProfile = pin['profiles'] as Map<String, dynamic>?;
+                              final ownerAvatarUrl = ownerProfile?['avatar_url'] as String?;
 
                               return GestureDetector(
                                 onTap: () {
@@ -636,6 +638,27 @@ class PinterestScreenState extends State<PinterestScreen> {
                                           child: Text(
                                             pin['title'] ?? 'Sin título',
                                             style: const TextStyle(color: Colors.white, fontSize: 12),
+                                          ),
+                                        ),
+                                      ),
+                                      Positioned(
+                                        top: 8,
+                                        right: 8,
+                                        child: CircleAvatar(
+                                          radius: 16,
+                                          backgroundColor: Colors.white70,
+                                          child: CircleAvatar(
+                                            radius: 14,
+                                            backgroundColor: Colors.grey.shade300,
+                                            backgroundImage: ownerAvatarUrl != null && ownerAvatarUrl.isNotEmpty
+                                                ? NetworkImage(ownerAvatarUrl)
+                                                : null,
+                                            child: ownerAvatarUrl == null || ownerAvatarUrl.isEmpty
+                                                ? Text(
+                                                    (ownerProfile?['username'] ?? ownerProfile?['full_name'] ?? 'U')[0].toString().toUpperCase(),
+                                                    style: const TextStyle(fontSize: 12),
+                                                  )
+                                                : null,
                                           ),
                                         ),
                                       ),
