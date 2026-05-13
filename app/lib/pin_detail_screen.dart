@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
+import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'profile_screen.dart';
-import 'auth_modal.dart'; 
+import 'auth_modal.dart';
+import 'utils/platform_file_saver.dart';
 
 class PinDetailScreen extends StatefulWidget {
   final Map<String, dynamic> pin;
@@ -64,6 +66,50 @@ class _PinDetailScreenState extends State<PinDetailScreen> {
     } catch (_) {
       if (mounted && _currentUserAvatarUrl != null) {
         setState(() => _currentUserAvatarUrl = null);
+      }
+    }
+  }
+
+  Future<void> _savePinImage() async {
+    final imageUrl = widget.pin['image_url'] as String?;
+    if (imageUrl == null || imageUrl.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No se encontró la imagen para guardar.')),
+        );
+      }
+      return;
+    }
+
+    try {
+      final response = await http.get(Uri.parse(imageUrl));
+      if (response.statusCode != 200) {
+        throw Exception('Código de respuesta ${response.statusCode}');
+      }
+
+      final bytes = response.bodyBytes;
+      final fileName = 'pin_${widget.pin['id'] ?? DateTime.now().millisecondsSinceEpoch}';
+      final savedPath = await saveImageToDevice(bytes, fileName);
+
+      if (mounted) {
+        if (savedPath != null) {
+          final message = savedPath == 'download'
+              ? 'Descarga iniciada en el navegador.'
+              : 'Imagen guardada en: $savedPath';
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(message)),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('No se pudo guardar la imagen en el dispositivo.')),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error al guardar imagen: $e')),
+        );
       }
     }
   }
@@ -333,7 +379,7 @@ class _PinDetailScreenState extends State<PinDetailScreen> {
               ],
             ),
             ElevatedButton(
-              onPressed: isGuest ? () => showAuthModal(context) : () {},
+              onPressed: isGuest ? () => showAuthModal(context) : _savePinImage,
               style: ElevatedButton.styleFrom(
                 backgroundColor: primaryColor,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
