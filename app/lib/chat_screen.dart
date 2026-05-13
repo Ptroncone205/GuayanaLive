@@ -1,5 +1,6 @@
 import 'dart:io';
-import 'dart:typed_data'; // Agregado para poder usar Uint8List
+import 'dart:typed_data'; 
+import 'dart:convert'; // Agregado para base64Encode
 
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -7,13 +8,13 @@ import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'camera_screen.dart';
-import 'services/groq_service.dart';
+// Eliminado: import 'services/groq_service.dart';
 
 class ChatScreen extends StatefulWidget {
   const ChatScreen({super.key});
 
   @override
-  State<ChatScreen> createState() => ChatScreenState(); // <-- Cambiado a público
+  State<ChatScreen> createState() => ChatScreenState();
 }
 
 class ChatMessage {
@@ -30,11 +31,10 @@ class ChatMessage {
   });
 }
 
-class ChatScreenState extends State<ChatScreen> { // <-- Cambiado a público
+class ChatScreenState extends State<ChatScreen> {
   final TextEditingController _messageController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   final ImagePicker _picker = ImagePicker();
-  final GroqService _groqService = GroqService();
   final SupabaseClient _supabase = Supabase.instance.client;
 
   bool _isLoading = false;
@@ -62,11 +62,9 @@ class ChatScreenState extends State<ChatScreen> { // <-- Cambiado a público
     super.dispose();
   }
 
-  // --- MÉTODO PÚBLICO PARA ABRIR LA CÁMARA DESDE FUERA ---
   void abrirCamaraDeseada() {
     _openCamera();
   }
-  // -------------------------------------------------------
 
   Future<void> _loadUserAvatar() async {
     final user = _supabase.auth.currentUser;
@@ -144,22 +142,33 @@ class ChatScreenState extends State<ChatScreen> { // <-- Cambiado a público
     _addMessage(ChatMessage(sender: 'ia', type: 'text', text: 'Escribiendo...'));
 
     try {
-      Uint8List? imageBytes;
+      String? base64Image;
       
       if (imagePath != null) {
-        imageBytes = await XFile(imagePath).readAsBytes();
+        final imageBytes = await XFile(imagePath).readAsBytes();
+        base64Image = base64Encode(imageBytes);
       }
 
-      final response = await _groqService.getChatResponse(userText, imageBytes: imageBytes);
+      // --- LLAMADA A SUPABASE EDGE FUNCTION ---
+      final response = await _supabase.functions.invoke(
+        'ai_proxy',
+        body: {
+          'prompt': userText,
+          if (base64Image != null) 'imageBase64': base64Image,
+        },
+      );
+
+      final data = response.data;
+      final aiReply = data['reply'] ?? 'Lo siento, no pude procesar la respuesta.';
       
       if (!mounted) return;
       
       setState(() {
         final lastIndex = _messages.lastIndexWhere((m) => m.sender == 'ia' && m.text == 'Escribiendo...');
         if (lastIndex != -1) {
-          _messages[lastIndex] = ChatMessage(sender: 'ia', type: 'text', text: response);
+          _messages[lastIndex] = ChatMessage(sender: 'ia', type: 'text', text: aiReply);
         } else {
-          _addMessage(ChatMessage(sender: 'ia', type: 'text', text: response));
+          _addMessage(ChatMessage(sender: 'ia', type: 'text', text: aiReply));
         }
       });
     } catch (e) {
@@ -345,7 +354,6 @@ class ChatScreenState extends State<ChatScreen> { // <-- Cambiado a público
 
   @override
   Widget build(BuildContext context) {
-    // SE ELIMINÓ EL APPBAR DE AQUÍ PORQUE AHORA ESTÁ INCORPORADO EN LA PANTALLA PRINCIPAL
     return Scaffold(
       body: Column(
         children: [
