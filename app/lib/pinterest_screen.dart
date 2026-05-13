@@ -66,6 +66,20 @@ class PinterestScreenState extends State<PinterestScreen> {
       final pins = List<Map<String, dynamic>>.from(pinResponse as List);
       final pinIds = pins.map((pin) => pin['id'] as int).toList();
 
+      // Obtener conteo de likes para cada pin
+      final likeCounts = pinIds.isEmpty
+          ? <int, int>{}
+          : Map<int, int>.fromEntries(
+              (await _supabase
+                  .from('pin_likes')
+                  .select('pin_id')
+                  .inFilter('pin_id', pinIds) as List)
+                  .map((row) => row['pin_id'] as int)
+                  .fold<Map<int, int>>({}, (counts, pinId) {
+                    counts[pinId] = (counts[pinId] ?? 0) + 1;
+                    return counts;
+                  }).entries);
+
       final tagRows = pinIds.isEmpty
           ? <Map<String, dynamic>>[]
           : List<Map<String, dynamic>>.from(
@@ -91,6 +105,7 @@ class PinterestScreenState extends State<PinterestScreen> {
           return {
             ...pin,
             'tags': pinId != null ? List<String>.from(pinTagsMap[pinId] ?? []) : <String>[],
+            'like_count': pinId != null ? likeCounts[pinId] ?? 0 : 0,
           };
         }).toList();
       });
@@ -688,6 +703,32 @@ class PinterestScreenState extends State<PinterestScreen> {
                                             }).toList(),
                                           ),
                                         ),
+                                      Positioned(
+                                        bottom: pinTags.isNotEmpty ? 40 : 8,
+                                        right: 8,
+                                        child: Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
+                                          decoration: BoxDecoration(
+                                            color: Colors.black54,
+                                            borderRadius: BorderRadius.circular(12.0),
+                                          ),
+                                          child: Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              const Icon(
+                                                Icons.favorite,
+                                                color: Colors.white,
+                                                size: 14,
+                                              ),
+                                              const SizedBox(width: 4),
+                                              Text(
+                                                '${pin['like_count'] ?? 0}',
+                                                style: const TextStyle(color: Colors.white, fontSize: 12),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
                                     ],
                                   ),
                                 ),

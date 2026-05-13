@@ -29,6 +29,7 @@ class _PinDetailScreenState extends State<PinDetailScreen> {
   final ScrollController _commentScrollController = ScrollController();
   final GlobalKey _imageBoxKey = GlobalKey();
   double? _imageHeight;
+  int _likeCount = 0;
 
   bool get isGuest => _supabase.auth.currentUser == null; 
 
@@ -145,14 +146,37 @@ class _PinDetailScreenState extends State<PinDetailScreen> {
 
   // --- NUEVA FUNCIÓN PARA OBTENER EL ESTADO DEL LIKE ---
   Future<void> _checkLikeStatus() async {
-    if (isGuest) return;
+    if (isGuest) {
+      // Para invitados, solo obtenemos el conteo total de likes
+      try {
+        final countResponse = await _supabase
+            .from('pin_likes')
+            .select('id')
+            .eq('pin_id', widget.pin['id']);
+        if (mounted) setState(() => _likeCount = (countResponse as List).length);
+      } catch (_) {}
+      return;
+    }
+
     try {
       final res = await _supabase.from('pin_likes')
           .select('id')
           .eq('pin_id', widget.pin['id'])
           .eq('user_id', _supabase.auth.currentUser!.id)
           .maybeSingle();
-      if (mounted) setState(() => _isLiked = res != null);
+      
+      // Obtener conteo total de likes
+      final countResponse = await _supabase
+          .from('pin_likes')
+          .select('id')
+          .eq('pin_id', widget.pin['id']);
+      
+      if (mounted) {
+        setState(() {
+          _isLiked = res != null;
+          _likeCount = (countResponse as List).length;
+        });
+      }
     } catch (_) {}
   }
 
@@ -256,6 +280,7 @@ class _PinDetailScreenState extends State<PinDetailScreen> {
     // UI optimista: Cambiamos el estado visualmente al instante
     setState(() {
       _isLiked = !_isLiked;
+      _likeCount += _isLiked ? 1 : -1;
     });
 
     try {
@@ -267,7 +292,10 @@ class _PinDetailScreenState extends State<PinDetailScreen> {
     } catch (e) {
       // Si falla, revertimos
       if (mounted) {
-        setState(() => _isLiked = !_isLiked);
+        setState(() {
+          _isLiked = !_isLiked;
+          _likeCount += _isLiked ? -1 : 1;
+        });
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Error actualizando like: $e')),
         );
@@ -370,9 +398,20 @@ class _PinDetailScreenState extends State<PinDetailScreen> {
           children: [
             Row(
               children: [
-                IconButton(
-                  icon: Icon(_isLiked ? Icons.favorite : Icons.favorite_border, color: _isLiked ? Colors.red : Colors.black),
-                  onPressed: _toggleLike,
+                Row(
+                  children: [
+                    IconButton(
+                      icon: Icon(_isLiked ? Icons.favorite : Icons.favorite_border, color: _isLiked ? Colors.red : Colors.black),
+                      onPressed: _toggleLike,
+                    ),
+                    Text(
+                      '$_likeCount',
+                      style: TextStyle(
+                        color: _isLiked ? Colors.red : Colors.black,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
                 ),
                 IconButton(icon: const Icon(Icons.share), onPressed: () {}),
                 IconButton(icon: const Icon(Icons.more_horiz), onPressed: () {}),
