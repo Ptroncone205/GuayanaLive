@@ -13,6 +13,7 @@ import 'map_screen.dart'; // Tu nueva pantalla de mapa
 
 final GlobalKey<PinterestScreenState> pinterestKey =
     GlobalKey<PinterestScreenState>();
+final GlobalKey<ChatScreenState> chatKey = GlobalKey<ChatScreenState>();
 
 class MainLayout extends StatefulWidget {
   const MainLayout({super.key});
@@ -29,7 +30,7 @@ class _MainLayoutState extends State<MainLayout> {
   // The persistent screens in our stack (AQUÍ ESTÁ EL MAPA AÑADIDO)
   final List<Widget> _screens = [
     PinterestScreen(key: pinterestKey), // Stack Index 0
-    const ChatScreen(), // Stack Index 1
+    ChatScreen(key: chatKey), // Stack Index 1
     const MapScreen(), // Stack Index 2 (Nueva pantalla del mapa)
     const UserChatScreen(), // Stack Index 3
     const ProfileScreen(), // Stack Index 4
@@ -141,11 +142,22 @@ class _MainLayoutState extends State<MainLayout> {
                 borderRadius: BorderRadius.circular(16),
               ),
               elevation: 4,
-              onPressed: () {
-                Navigator.push(
-                  context,
+              onPressed: () async {
+                final nav = Navigator.of(context);
+                final result = await nav.push<CameraResult>(
                   MaterialPageRoute(builder: (_) => const CameraScreen()),
                 );
+                if (result == null || !mounted) return;
+
+                if (result.action == CameraAction.scanAI) {
+                  // Switch to AI Chat tab and update the existing screen with the image
+                  setState(() => _selectedIndex = 1);
+                  chatKey.currentState?.setPendingImage(result.imagePath);
+                } else {
+                  // Trigger the full post publication flow (location check included)
+                  await pinterestKey.currentState
+                      ?.showUploadFromCameraResult(result.imagePath);
+                }
               },
               child: const Icon(Icons.camera_alt, size: 28),
             )
