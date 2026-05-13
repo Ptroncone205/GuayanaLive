@@ -11,7 +11,6 @@ final ValueNotifier<bool> guestModeNotifier = ValueNotifier(false);
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await dotenv.load(fileName: 'assets/.env');
 
   await Supabase.initialize(
     url: 'https://oulpjjpvkfxcskrqibet.supabase.co',
