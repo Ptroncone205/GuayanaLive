@@ -1,15 +1,21 @@
 import 'dart:io';
 import 'dart:math';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:exif/exif.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:http/http.dart' as http;
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 import 'camera_screen.dart';
 import 'pin_detail_screen.dart';
 import 'auth_modal.dart';
+import 'services/groq_service.dart';
 
 class PinterestScreen extends StatefulWidget {
   const PinterestScreen({super.key});
@@ -106,8 +112,45 @@ class PinterestScreenState extends State<PinterestScreen> {
     }
   }
 
-  Future<void> _uploadPin(XFile image, String title, List<String> tags) async {
+  Future<void> _uploadPin(XFile image, String title, List<String> tags, bool isFromCamera) async {
     try {
+      Map<String, double>? location = await _extractLocation(image);
+
+      if (location == null && mounted && isFromCamera) {
+        final useDeviceGPS = await showDialog<bool>(
+          context: context,
+          barrierDismissible: false,
+          builder: (ctx) => AlertDialog(
+            title: const Text('Ubicación de la especie'),
+            content: const Text(
+                'No pudimos detectar la ubicación en la foto. Para que este avistamiento se registre en el mapa de calor, necesitamos usar la ubicación actual de tu dispositivo. ¿Deseas permitirlo? (Si cancelas, se subirá sin ubicación).'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('No, subir sin ubicación'),
+              ),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(backgroundColor: Theme.of(ctx).primaryColor),
+                onPressed: () => Navigator.pop(ctx, true),
+                child: const Text('Sí, usar mi ubicación', style: TextStyle(color: Colors.white)),
+              ),
+            ],
+          ),
+        );
+
+        if (useDeviceGPS == true) {
+          try {
+            location = await _getDeviceLocation();
+          } catch (e) {
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('Ubicación: ${e.toString().replaceAll('Exception: ', '')}')),
+              );
+            }
+          }
+        }
+      }
+
       final fileExt = image.name.split('.').last;
       final fileName = '${DateTime.now().millisecondsSinceEpoch}.$fileExt';
 
@@ -126,6 +169,8 @@ class PinterestScreenState extends State<PinterestScreen> {
         'image_url': imageUrl,
         'height': 200.0 + Random().nextInt(200), 
         'user_id': _supabase.auth.currentUser!.id, 
+        if (location != null) 'latitude': location['latitude'],
+        if (location != null) 'longitude': location['longitude'],
       }).select('id');
 
       final pinRows = List<Map<String, dynamic>>.from(pinResponse as List);
@@ -155,6 +200,85 @@ class PinterestScreenState extends State<PinterestScreen> {
           SnackBar(content: Text('Error al subir: $e')),
         );
       }
+    }
+  }
+
+  Future<Map<String, double>?> _extractLocation(XFile image) async {
+    if (kIsWeb) return null; // EXIF and Geolocator might need specific web handling or be skipped
+    try {
+      final bytes = await image.readAsBytes();
+      final data = await readExifFromBytes(bytes);
+      
+      if (data.containsKey('GPS GPSLatitude') && data.containsKey('GPS GPSLongitude')) {
+        final latTag = data['GPS GPSLatitude'];
+        final latRef = data['GPS GPSLatitudeRef'];
+        final lngTag = data['GPS GPSLongitude'];
+        final lngRef = data['GPS GPSLongitudeRef'];
+        
+        double? lat = _getDecimalDegrees(latTag, latRef);
+        double? lng = _getDecimalDegrees(lngTag, lngRef);
+        
+        if (lat != null && lng != null) {
+          return {'latitude': lat, 'longitude': lng};
+        }
+      }
+    } catch (e) {
+      debugPrint('Error leyendo EXIF: $e');
+    }
+    return null;
+  }
+
+  Future<Map<String, double>?> _getDeviceLocation() async {
+    try {
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        throw Exception('El servicio de GPS está desactivado. Por favor enciéndelo en la configuración de Windows/Android.');
+      }
+
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) {
+          throw Exception('Permiso de ubicación denegado.');
+        }
+      }
+      if (permission == LocationPermission.deniedForever) {
+        throw Exception('Permiso de ubicación denegado permanentemente.');
+      }
+
+      Position position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.medium,
+      );
+      return {'latitude': position.latitude, 'longitude': position.longitude};
+    } catch (e) {
+      if (e is Exception) rethrow;
+      throw Exception('Error al obtener ubicación: $e');
+    }
+  }
+
+  double? _getDecimalDegrees(IfdTag? tag, IfdTag? ref) {
+    if (tag == null || tag.values.length < 3) return null;
+    try {
+      final values = tag.values.toList();
+      double parseRatio(dynamic val) {
+        if (val is Ratio) return val.numerator / val.denominator;
+        return double.tryParse(val.toString()) ?? 0.0;
+      }
+      
+      final d = parseRatio(values[0]);
+      final m = parseRatio(values[1]);
+      final s = parseRatio(values[2]);
+      
+      double degrees = d + (m / 60.0) + (s / 3600.0);
+      if (ref != null) {
+        final refStr = ref.printable.toUpperCase();
+        if (refStr == 'S' || refStr == 'W') {
+          degrees = -degrees;
+        }
+      }
+      return degrees;
+    } catch (e) {
+      return null;
     }
   }
 
@@ -250,11 +374,39 @@ class PinterestScreenState extends State<PinterestScreen> {
     _filterPins(_searchController.text);
   }
 
-  Future<void> _showUploadDialog(XFile image) async {
+  Future<void> _generateWithAI(XFile image, TextEditingController titleController, void Function(void Function()) setDialogState) async {
+    setDialogState(() => _isLoading = true);
+    try {
+      final bytes = await image.readAsBytes();
+      final groqService = GroqService();
+      final result = await groqService.getAutoFillData(bytes);
+
+      if (result.containsKey('titulo')) {
+        titleController.text = result['titulo'].toString();
+      }
+      if (result.containsKey('tags')) {
+        final tags = List<String>.from(result['tags'] as List);
+        _addDraftTagsFromInput(tags.join(','), setDialogState);
+      }
+    } catch (e) {
+      debugPrint('Error en IA: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error al procesar con IA: $e')),
+        );
+      }
+    } finally {
+      setDialogState(() => _isLoading = false);
+    }
+  }
+
+
+  Future<void> _showUploadDialog(XFile image, {bool isFromCamera = false}) async {
     final titleController = TextEditingController();
     _tagController.clear();
     setState(() => _draftTags.clear());
     bool isUploading = false;
+    bool isGeneratingAI = false;
 
     await showDialog(
       context: context,
@@ -299,11 +451,24 @@ class PinterestScreenState extends State<PinterestScreen> {
                   const SizedBox(height: 16),
                   TextField(
                     controller: titleController,
-                    decoration: const InputDecoration(
+                    decoration: InputDecoration(
                       labelText: 'Título de la imagen',
-                      border: OutlineInputBorder(),
+                      border: const OutlineInputBorder(),
+                      suffixIcon: IconButton(
+                        icon: isGeneratingAI 
+                            ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                            : const Icon(Icons.auto_awesome, color: Colors.purple),
+                        tooltip: 'Autocompletar con IA',
+                        onPressed: isGeneratingAI || isUploading
+                            ? null
+                            : () async {
+                                setDialogState(() => isGeneratingAI = true);
+                                await _generateWithAI(image, titleController, setDialogState);
+                                setDialogState(() => isGeneratingAI = false);
+                              },
+                      ),
                     ),
-                    enabled: !isUploading,
+                    enabled: !isUploading && !isGeneratingAI,
                   ),
                   const SizedBox(height: 16),
                   TextField(
@@ -314,7 +479,7 @@ class PinterestScreenState extends State<PinterestScreen> {
                       border: const OutlineInputBorder(),
                       suffixIcon: IconButton(
                         icon: const Icon(Icons.add),
-                        onPressed: _tagController.text.trim().isEmpty
+                        onPressed: _tagController.text.trim().isEmpty || isGeneratingAI
                             ? null
                             : () => _addDraftTagsFromInput(_tagController.text, setDialogState),
                       ),
@@ -322,7 +487,7 @@ class PinterestScreenState extends State<PinterestScreen> {
                     textInputAction: TextInputAction.done,
                     onChanged: (_) => setDialogState(() {}),
                     onSubmitted: (value) => _addDraftTagsFromInput(value, setDialogState),
-                    enabled: !isUploading,
+                    enabled: !isUploading && !isGeneratingAI,
                   ),
                   const SizedBox(height: 12),
                   if (_draftTags.isNotEmpty)
@@ -370,12 +535,12 @@ class PinterestScreenState extends State<PinterestScreen> {
               ),
               actions: [
                 TextButton(
-                  onPressed: isUploading ? null : () => Navigator.pop(context),
+                  onPressed: isUploading || isGeneratingAI ? null : () => Navigator.pop(context),
                   child: const Text('Cancelar'),
                 ),
                 ElevatedButton(
                   style: ElevatedButton.styleFrom(backgroundColor: Theme.of(context).primaryColor),
-                  onPressed: isUploading
+                  onPressed: isUploading || isGeneratingAI
                       ? null
                       : () async {
                           if (titleController.text.trim().isEmpty) {
@@ -385,7 +550,7 @@ class PinterestScreenState extends State<PinterestScreen> {
                             return;
                           }
                           setDialogState(() => isUploading = true);
-                          await _uploadPin(image, titleController.text.trim(), _draftTags);
+                          await _uploadPin(image, titleController.text.trim(), _draftTags, isFromCamera);
                           if (context.mounted) Navigator.pop(context);
                         },
                   child: isUploading
@@ -461,7 +626,7 @@ class PinterestScreenState extends State<PinterestScreen> {
       if (!mounted) return;
       if (pickedFile == null) return;
       
-      await _showUploadDialog(pickedFile);
+      await _showUploadDialog(pickedFile, isFromCamera: source == ImageSource.camera);
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -478,7 +643,7 @@ class PinterestScreenState extends State<PinterestScreen> {
     );
 
     if (imagePath != null && mounted) {
-      await _showUploadDialog(XFile(imagePath));
+      await _showUploadDialog(XFile(imagePath), isFromCamera: true);
     }
   }
 

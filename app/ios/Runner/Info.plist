@@ -70,5 +70,7 @@
 	<string>This app needs camera access to take photos</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>This app needs photo library access to select photos</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Esta aplicación necesita acceso a tu ubicación para poder mostrar dónde tomaste la foto en el mapa de avistamientos.</string>
 </dict>
 </plist>

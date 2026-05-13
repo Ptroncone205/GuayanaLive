@@ -7,6 +7,7 @@ import 'user_chat_screen.dart'; // Import the missing feature
 import 'profile_screen.dart';
 import 'camera_screen.dart';
 import 'auth_modal.dart';
+import 'map_screen.dart'; // Tu nueva pantalla de mapa
 
 final GlobalKey<PinterestScreenState> pinterestKey = GlobalKey<PinterestScreenState>();
 
@@ -20,12 +21,13 @@ class MainLayout extends StatefulWidget {
 class _MainLayoutState extends State<MainLayout> {
   int _selectedIndex = 0;
 
-  // The persistent screens in our stack
+  // The persistent screens in our stack (AQUÍ ESTÁ EL MAPA AÑADIDO)
   final List<Widget> _screens = [
     PinterestScreen(key: pinterestKey), // Stack Index 0
     const ChatScreen(),                 // Stack Index 1
-    const UserChatScreen(),             // Stack Index 2
-    const ProfileScreen(),              // Stack Index 3
+    const MapScreen(),                  // Stack Index 2 (Nueva pantalla del mapa)
+    const UserChatScreen(),             // Stack Index 3
+    const ProfileScreen(),              // Stack Index 4
   ];
 
   // Logic to determine which screen from the list above to show
@@ -33,8 +35,9 @@ class _MainLayoutState extends State<MainLayout> {
     switch (_selectedIndex) {
       case 0: return 0; // Home Feed
       case 1: return 1; // AI Chat
-      case 3: return 2; // User Chat
-      case 4: return 3; // Profile
+      case 3: return 2; // Map (El índice 2 de navegación está reservado para "Añadir")
+      case 4: return 3; // User Chat
+      case 5: return 4; // Profile
       default: return 0;
     }
   }
@@ -101,8 +104,8 @@ class _MainLayoutState extends State<MainLayout> {
           _AnimatedNavButton(
             icon: Icons.person_outlined,
             activeIcon: Icons.person,
-            isSelected: _selectedIndex == 4,
-            onTap: () => _onItemTapped(4),
+            isSelected: _selectedIndex == 5, // Perfil ahora es el 5
+            onTap: () => _onItemTapped(5),
           ),
           _AnimatedNavButton(
             icon: Icons.home_outlined,
@@ -117,17 +120,23 @@ class _MainLayoutState extends State<MainLayout> {
             onTap: () => _onItemTapped(1),
           ),
           _AnimatedNavButton(
+            icon: Icons.map_outlined,
+            activeIcon: Icons.map,
+            isSelected: _selectedIndex == 3, // El mapa es el 3
+            onTap: () => _onItemTapped(3),
+          ),
+          _AnimatedNavButton(
             icon: Icons.chat_bubble_outline,
             activeIcon: Icons.chat_bubble,
-            isSelected: _selectedIndex == 3,
-            onTap: () => _onItemTapped(3),
+            isSelected: _selectedIndex == 4, // Chat ahora es el 4
+            onTap: () => _onItemTapped(4),
           ),
           const Spacer(),
           _AnimatedNavButton(
             icon: Icons.add_box_outlined,
             activeIcon: Icons.add_box,
             isSelected: false,
-            onTap: () => _onItemTapped(2),
+            onTap: () => _onItemTapped(2), // Añadir sigue siendo el 2 (no cambia estado)
           ),
           const SizedBox(height: 20),
         ],
@@ -155,32 +164,36 @@ class _MainLayoutState extends State<MainLayout> {
         selectedItemColor: Colors.white,
         unselectedItemColor: Colors.white70,
         iconSize: 28,
-        // Detailed labels for improved developer readability
         items: const [
           BottomNavigationBarItem(
             icon: Icon(Icons.home_outlined),
             activeIcon: Icon(Icons.home),
-            label: 'Home Feed',
+            label: 'Home Feed', // Índice 0
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.auto_awesome_outlined),
             activeIcon: Icon(Icons.auto_awesome),
-            label: 'AI Chat',
+            label: 'AI Chat', // Índice 1
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.add_box_outlined),
             activeIcon: Icon(Icons.add_box),
-            label: 'Add New Post',
+            label: 'Add New Post', // Índice 2
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.map_outlined),
+            activeIcon: Icon(Icons.map),
+            label: 'Map', // Índice 3
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.chat_bubble_outline),
             activeIcon: Icon(Icons.chat_bubble),
-            label: 'User Messages',
+            label: 'User Messages', // Índice 4
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.person_outline),
             activeIcon: Icon(Icons.person),
-            label: 'Profile',
+            label: 'Profile', // Índice 5
           ),
         ],
       ),
