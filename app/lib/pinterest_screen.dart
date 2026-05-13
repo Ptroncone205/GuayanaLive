@@ -13,6 +13,7 @@ import 'package:http/http.dart' as http;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 import 'camera_screen.dart';
+import 'notifications_screen.dart';
 import 'pin_detail_screen.dart';
 import 'auth_modal.dart';
 import 'services/groq_service.dart';
@@ -240,6 +241,10 @@ class PinterestScreenState extends State<PinterestScreen> {
         }
       }
 
+      if (pinId != null) {
+        await _notifyFollowersAboutNewPin(pinId);
+      }
+
       await _fetchPins();
       await _fetchExistingTags();
 
@@ -254,6 +259,47 @@ class PinterestScreenState extends State<PinterestScreen> {
           context,
         ).showSnackBar(SnackBar(content: Text('Error al subir: $e')));
       }
+    }
+  }
+
+  Future<void> _notifyFollowersAboutNewPin(int pinId) async {
+    final currentUser = _supabase.auth.currentUser;
+    if (currentUser == null) return;
+
+    try {
+      final followersRes = await _supabase
+          .from('follows')
+          .select('follower_id')
+          .eq('followee_id', currentUser.id);
+
+      final followers = List<Map<String, dynamic>>.from(followersRes as List);
+      if (followers.isEmpty) return;
+
+      final profileRes = await _supabase
+          .from('profiles')
+          .select('full_name, username')
+          .eq('id', currentUser.id)
+          .maybeSingle();
+
+      final actorName = profileRes != null
+          ? (profileRes['full_name'] as String?) ?? (profileRes['username'] as String?) ?? 'Alguien'
+          : 'Alguien';
+
+      final notifications = followers.map((row) {
+        return {
+          'user_id': row['follower_id'],
+          'actor_id': currentUser.id,
+          'type': 'post',
+          'title': 'Nueva publicación',
+          'message': '$actorName publicó una nueva publicación.',
+          'is_read': false,
+          'created_at': DateTime.now().toUtc().toIso8601String(),
+        };
+      }).toList();
+
+      await _supabase.from('notifications').insert(notifications);
+    } catch (e) {
+      debugPrint('Error creando notificaciones de publicación: $e');
     }
   }
 
@@ -837,6 +883,34 @@ class PinterestScreenState extends State<PinterestScreen> {
               onPressed: _startSearch,
               tooltip: 'Buscar',
             ),
+          IconButton(
+            icon: Stack(
+              alignment: Alignment.center,
+              children: [
+                const Icon(Icons.notifications_outlined),
+                Positioned(
+                  right: 0,
+                  top: 8,
+                  child: Container(
+                    width: 8,
+                    height: 8,
+                    decoration: BoxDecoration(
+                      color: Colors.red,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => const NotificationsScreen(),
+                ),
+              );
+            },
+            tooltip: 'Notificaciones',
+          ),
         ],
       ),
       body: Padding(

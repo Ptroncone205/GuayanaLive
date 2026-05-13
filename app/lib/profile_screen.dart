@@ -35,6 +35,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   final int _followers = 0;
   final int _following = 0;
+  bool _isFollowing = false;
+  int _followersCount = 0;
+  int _followingCount = 0;
   int _postsCount = 0;
 
   List<Map<String, dynamic>> _posts = [];
@@ -135,7 +138,85 @@ class _ProfileScreenState extends State<ProfileScreen> {
           _isLoading = false;
         });
       }
+
+      await _fetchFollowInfo();
     } catch (e) {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _fetchFollowInfo() async {
+    if (_supabase.auth.currentUser == null || _isMyProfile) return;
+
+    try {
+      final followRes = await _supabase.from('follows').select('id')
+          .eq('follower_id', _supabase.auth.currentUser!.id)
+          .eq('followee_id', _targetUserId)
+          .maybeSingle();
+
+      final followersRes = await _supabase.from('follows').select('id').eq('followee_id', _targetUserId);
+      final followingRes = await _supabase.from('follows').select('id').eq('follower_id', _targetUserId);
+
+      if (mounted) {
+        setState(() {
+          _isFollowing = followRes != null;
+          _followersCount = (followersRes as List).length;
+          _followingCount = (followingRes as List).length;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error cargando estado de seguimiento: $e');
+    }
+  }
+
+  Future<void> _toggleFollow() async {
+    final currentUser = _supabase.auth.currentUser;
+    if (currentUser == null) {
+      showAuthModal(context);
+      return;
+    }
+    if (_isMyProfile) return;
+
+    setState(() => _isLoading = true);
+    try {
+      if (_isFollowing) {
+        await _supabase.from('follows').delete().match({
+          'follower_id': currentUser.id,
+          'followee_id': _targetUserId,
+        });
+        if (mounted) {
+          setState(() {
+            _isFollowing = false;
+            _followersCount = (_followersCount - 1).clamp(0, 999999);
+          });
+        }
+      } else {
+        await _supabase.from('follows').insert({
+          'follower_id': currentUser.id,
+          'followee_id': _targetUserId,
+          'created_at': DateTime.now().toUtc().toIso8601String(),
+        });
+        await _supabase.from('notifications').insert({
+          'user_id': _targetUserId,
+          'actor_id': currentUser.id,
+          'type': 'follow',
+          'title': 'Nuevo seguidor',
+          'message': '${_nameController.text.isNotEmpty ? _nameController.text : 'Alguien'} te sigue.',
+          'is_read': false,
+          'created_at': DateTime.now().toUtc().toIso8601String(),
+        });
+        if (mounted) {
+          setState(() {
+            _isFollowing = true;
+            _followersCount += 1;
+          });
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error actualizando seguimiento: $e')));
+      }
+    } finally {
       if (mounted) setState(() => _isLoading = false);
     }
   }
@@ -376,6 +457,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                   _usernameController.text.isNotEmpty ? '@${_usernameController.text}' : '',
                                   style: const TextStyle(color: Colors.grey),
                                 ),
+                              if (!isGuest)
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 4.0),
+                                  child: Text(
+                                    '$_followersCount seguidores • $_followingCount siguiendo',
+                                    style: const TextStyle(color: Colors.grey, fontSize: 13),
+                                  ),
+                                ),
                               const SizedBox(height: 12),
                               
                               // BOTONES DE ACCIÓN (Editar o Mensaje)
@@ -394,16 +483,38 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                   ),
                                 )
                               else if (!isGuest)
-                                // Botón PM para perfiles de terceros
-                                ElevatedButton.icon(
-                                  onPressed: _startChatWithUser,
-                                  icon: const Icon(Icons.chat_bubble_outline, size: 18),
-                                  label: const Text('Enviar Mensaje'),
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: Colors.green.shade700,
-                                    foregroundColor: Colors.white,
-                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-                                  ),
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: ElevatedButton.icon(
+                                        onPressed: _startChatWithUser,
+                                        icon: const Icon(Icons.chat_bubble_outline, size: 18),
+                                        label: const Text('Enviar Mensaje'),
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: Colors.green.shade700,
+                                          foregroundColor: Colors.white,
+                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    OutlinedButton.icon(
+                                      onPressed: _toggleFollow,
+                                      icon: Icon(
+                                        _isFollowing ? Icons.check : Icons.person_add,
+                                        size: 18,
+                                      ),
+                                      label: Text(_isFollowing ? 'Siguiendo' : 'Seguir'),
+                                      style: OutlinedButton.styleFrom(
+                                        foregroundColor: _isFollowing ? Colors.green.shade700 : Colors.white,
+                                        backgroundColor: _isFollowing ? Colors.white : Colors.green.shade700,
+                                        side: BorderSide(
+                                          color: _isFollowing ? Colors.green.shade700 : Colors.transparent,
+                                        ),
+                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                                      ),
+                                    ),
+                                  ],
                                 ),
                             ],
                           ),

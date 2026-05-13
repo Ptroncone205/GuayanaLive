@@ -63,21 +63,31 @@ class _UserChatScreenState extends State<UserChatScreen> {
 
   Future<void> _refreshChatData() async {
     if (_currentUserId == null) return;
+    final currentUserId = _currentUserId!;
 
     setState(() => _isLoading = true);
     try {
-      // 1. Obtener contactos (mutuals)
+      // 1. Obtener contactos directos y personas que sigues
       final contactsRes = await _supabase.from('contacts').select('''
         user_id_1, user_id_2
-      ''').or('user_id_1.eq.$_currentUserId,user_id_2.eq.$_currentUserId');
+      ''').or('user_id_1.eq.$currentUserId,user_id_2.eq.$currentUserId');
 
-      final List<String> contactIds = [];
+      final Set<String> contactIdSet = {};
       for (var row in contactsRes as List<dynamic>) {
         final u1 = row['user_id_1'] as String;
         final u2 = row['user_id_2'] as String;
-        contactIds.add(u1 == _currentUserId ? u2 : u1);
+        contactIdSet.add(u1 == currentUserId ? u2 : u1);
       }
 
+      final followRes = await _supabase.from('follows').select('followee_id').eq('follower_id', currentUserId);
+      for (var row in followRes as List<dynamic>) {
+        final followeeId = row['followee_id'] as String?;
+        if (followeeId != null) {
+          contactIdSet.add(followeeId);
+        }
+      }
+
+      final contactIds = contactIdSet.toList();
       List<ChatPartner> loadedContacts = [];
       if (contactIds.isNotEmpty) {
         final profilesRes = await _supabase
@@ -97,17 +107,22 @@ class _UserChatScreenState extends State<UserChatScreen> {
       // 2. Obtener hilos de chat activos
       final threadsRes = await _supabase.from('chat_threads').select('''
         id, user1_id, user2_id, last_message, updated_at
-      ''').or('user1_id.eq.$_currentUserId,user2_id.eq.$_currentUserId')
+      ''').or('user1_id.eq.$currentUserId,user2_id.eq.$currentUserId')
         .order('updated_at', ascending: false);
 
       List<ChatThread> loadedThreads = [];
       for (var row in threadsRes as List<dynamic>) {
         final u1 = row['user1_id'] as String;
         final u2 = row['user2_id'] as String;
-        final partnerId = u1 == _currentUserId ? u2 : u1;
+        final partnerId = u1 == currentUserId ? u2 : u1;
         
         // Buscar info del perfil (si es contacto lo tomamos de ahí, si no hacemos query)
-        ChatPartner? partner = loadedContacts.where((c) => c.id == partnerId).firstOrNull;
+        ChatPartner? partner;
+        try {
+          partner = loadedContacts.firstWhere((c) => c.id == partnerId);
+        } catch (_) {
+          partner = null;
+        }
         if (partner == null) {
           final pRes = await _supabase.from('profiles').select('id, username, full_name, avatar_url').eq('id', partnerId).maybeSingle();
           if (pRes != null) {
@@ -144,11 +159,12 @@ class _UserChatScreenState extends State<UserChatScreen> {
 
   Future<void> _openThread(ChatPartner partner) async {
     if (_currentUserId == null) return;
+    final currentUserId = _currentUserId!;
     
     // Verificar si ya existe el hilo
     final existingThread = await _supabase.from('chat_threads')
         .select('id')
-        .or('and(user1_id.eq.$_currentUserId,user2_id.eq.${partner.id}),and(user1_id.eq.${partner.id},user2_id.eq.$_currentUserId)')
+        .or('and(user1_id.eq.$currentUserId,user2_id.eq.${partner.id}),and(user1_id.eq.${partner.id},user2_id.eq.$currentUserId)')
         .maybeSingle();
 
     String threadId;
@@ -157,7 +173,7 @@ class _UserChatScreenState extends State<UserChatScreen> {
     } else {
       // Crear nuevo hilo
       final insertRes = await _supabase.from('chat_threads').insert({
-        'user1_id': _currentUserId,
+        'user1_id': currentUserId,
         'user2_id': partner.id,
         'last_message': 'Chat iniciado',
       }).select('id').single();
