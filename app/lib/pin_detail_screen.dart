@@ -9,8 +9,9 @@ import 'utils/platform_file_saver.dart';
 
 class PinDetailScreen extends StatefulWidget {
   final Map<String, dynamic> pin;
+  final bool fromProfile;
 
-  const PinDetailScreen({super.key, required this.pin});
+  const PinDetailScreen({super.key, required this.pin, this.fromProfile = false});
 
   @override
   State<PinDetailScreen> createState() => _PinDetailScreenState();
@@ -612,6 +613,15 @@ class _PinDetailScreenState extends State<PinDetailScreen> {
         backgroundColor: Colors.white,
         elevation: 0,
         iconTheme: const IconThemeData(color: Colors.black),
+        leading: widget.fromProfile
+            ? IconButton(
+                icon: const Icon(Icons.arrow_back),
+                onPressed: () {
+                  // Navegar de vuelta al perfil
+                  Navigator.of(context).pop();
+                },
+              )
+            : null,
       ),
       body: SingleChildScrollView(
         child: Column(
