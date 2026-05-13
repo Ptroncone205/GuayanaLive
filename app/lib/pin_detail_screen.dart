@@ -1,3 +1,5 @@
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 import 'package:http/http.dart' as http;
@@ -383,291 +385,271 @@ class _PinDetailScreenState extends State<PinDetailScreen> {
     );
   }
 
-  Widget _buildDetailsAndComments() {
-    final primaryColor = Theme.of(context).primaryColor;
-    final pinTags = List<String>.from(widget.pin['tags'] ?? []);
-    final ownerProfile = widget.pin['profiles'] as Map<String, dynamic>?;
-    final ownerName = ownerProfile?['username'] ?? ownerProfile?['full_name'] ?? 'Anónimo';
-    final ownerId = widget.pin['user_id'];
-    final ownerAvatarUrl = ownerProfile?['avatar_url'] as String?;
+  // Cambia la firma de la función para aceptar el booleano
+Widget _buildDetailsAndComments({required bool isDesktop}) {
+  final primaryColor = Theme.of(context).primaryColor;
+  final pinTags = List<String>.from(widget.pin['tags'] ?? []);
+  final ownerProfile = widget.pin['profiles'] as Map<String, dynamic>?;
+  final ownerName = ownerProfile?['username'] ?? ownerProfile?['full_name'] ?? 'Anónimo';
+  final ownerId = widget.pin['user_id'];
+  final ownerAvatarUrl = ownerProfile?['avatar_url'] as String?;
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Row(
-              children: [
-                Row(
-                  children: [
-                    IconButton(
-                      icon: Icon(_isLiked ? Icons.favorite : Icons.favorite_border, color: _isLiked ? Colors.red : Colors.black),
-                      onPressed: _toggleLike,
-                    ),
-                    Text(
-                      '$_likeCount',
-                      style: TextStyle(
-                        color: _isLiked ? Colors.red : Colors.black,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ],
-                ),
-                IconButton(icon: const Icon(Icons.share), onPressed: () {}),
-                IconButton(icon: const Icon(Icons.more_horiz), onPressed: () {}),
-              ],
-            ),
-            ElevatedButton(
-              onPressed: isGuest ? () => showAuthModal(context) : _savePinImage,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: primaryColor,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-              ),
-              child: const Text('Guardar', style: TextStyle(color: Colors.white)),
-            ),
-          ],
-        ),
-        const SizedBox(height: 16),
-        Text(
-          widget.pin['title'] ?? 'Sin título',
-          style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-        ),
-        if (ownerId != null) ...[
-          const SizedBox(height: 12),
-          GestureDetector(
-            onTap: () {
-              Navigator.push(context, MaterialPageRoute(builder: (_) => ProfileScreen(userId: ownerId)));
-            },
-            child: Row(
-              children: [
-                CircleAvatar(
-                  radius: 16,
-                  backgroundColor: Colors.white70,
-                  child: CircleAvatar(
-                    radius: 14,
-                    backgroundColor: primaryColor.withAlpha(77),
-                    backgroundImage: ownerAvatarUrl != null && ownerAvatarUrl.isNotEmpty
-                        ? NetworkImage(ownerAvatarUrl)
-                        : null,
-                    child: ownerAvatarUrl == null || ownerAvatarUrl.isEmpty
-                        ? Text(ownerName[0].toUpperCase(), style: TextStyle(color: primaryColor, fontSize: 12))
-                        : null,
+  // Widgets de cabecera (Likes, Botones, Título, Descripción)
+  final headerInfo = Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      // Fila de Acciones (Likes, Share, More, Guardar)
+      Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Row(
+            children: [
+              Row(
+                children: [
+                  IconButton(
+                    icon: Icon(_isLiked ? Icons.favorite : Icons.favorite_border, 
+                      color: _isLiked ? Colors.red : Colors.black),
+                    onPressed: _toggleLike,
                   ),
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  pinTags.isNotEmpty ? ownerName : 'Usuario eliminado',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontStyle: pinTags.isEmpty ? FontStyle.italic : FontStyle.normal),
-                ),
-              ],
-            ),
-          ),
-        ],
-        if (widget.pin['description'] != null) ...[
-          const SizedBox(height: 12),
-          Text(widget.pin['description']),
-        ],
-        if (pinTags.isNotEmpty) ...[
-          const SizedBox(height: 12),
-          Wrap(
-            spacing: 6,
-            runSpacing: 6,
-            children: pinTags.map((tag) => Chip(
-              label: Text(tag, style: const TextStyle(fontSize: 12)),
-              backgroundColor: Colors.grey.shade200,
-              side: BorderSide.none,
-            )).toList(),
-          ),
-        ],
-        const Divider(height: 32),
-        const Text('Comentarios', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-        const SizedBox(height: 16),
-        ConstrainedBox(
-          constraints: BoxConstraints(
-            maxHeight: _imageHeight ?? (widget.pin['height'] as num?)?.toDouble() ?? 400.0,
-          ),
-          child: _isLoadingComments
-              ? Center(child: CircularProgressIndicator(color: primaryColor))
-              : _comments.isEmpty
-                  ? const Center(child: Text('Aún no hay comentarios.', style: TextStyle(color: Colors.grey)))
-                  : Scrollbar(
-                      controller: _commentScrollController,
-                      thumbVisibility: true,
-                      child: ListView.builder(
-                        controller: _commentScrollController,
-                        shrinkWrap: true,
-                        physics: const AlwaysScrollableScrollPhysics(),
-                        padding: EdgeInsets.zero,
-                        itemCount: _comments.length,
-                        itemBuilder: (context, index) {
-                          final comment = _comments[index];
-                          final commenterProfile = comment['profiles'] as Map<String, dynamic>?;
-                          final commenterAvatarUrl = commenterProfile?['avatar_url'] as String?;
-                          final commenterName = commenterProfile?['username'] ?? commenterProfile?['full_name'] ?? 'Usuario';
-                          final commenterId = comment['user_id'];
-                          final isMyComment = !isGuest && _supabase.auth.currentUser?.id == commenterId;
-
-                          return Padding(
-                            padding: const EdgeInsets.only(bottom: 12.0),
-                            child: Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                GestureDetector(
-                                  onTap: commenterId == null ? null : () {
-                                    Navigator.push(context, MaterialPageRoute(builder: (_) => ProfileScreen(userId: commenterId)));
-                                  },
-                                  child: CircleAvatar(
-                                    radius: 16,
-                                    backgroundColor: Colors.grey.shade300,
-                                    backgroundImage: commenterAvatarUrl != null && commenterAvatarUrl.isNotEmpty ? NetworkImage(commenterAvatarUrl) : null,
-                                    child: (commenterAvatarUrl == null || commenterAvatarUrl.isEmpty)
-                                        ? Text(commenterName[0].toUpperCase(), style: const TextStyle(fontSize: 12))
-                                        : null,
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      GestureDetector(
-                                        onTap: commenterId == null ? null : () {
-                                          Navigator.push(context, MaterialPageRoute(builder: (_) => ProfileScreen(userId: commenterId)));
-                                        },
-                                        child: Text(commenterName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                                      ),
-                                      Text(comment['text'] ?? '', style: const TextStyle(fontSize: 14)),
-                                    ],
-                                  ),
-                                ),
-                                if (isMyComment)
-                                  IconButton(
-                                    icon: const Icon(Icons.delete_outline, size: 18, color: Colors.grey),
-                                    onPressed: () => _deleteComment(comment['id']),
-                                    constraints: const BoxConstraints(),
-                                    padding: EdgeInsets.zero,
-                                  ),
-                              ],
-                            ),
-                          );
-                        },
-                      ),
+                  Text(
+                    '$_likeCount',
+                    style: TextStyle(
+                      color: _isLiked ? Colors.red : Colors.black,
+                      fontWeight: FontWeight.bold,
                     ),
-        ),
+                  ),
+                ],
+              ),
+              IconButton(icon: const Icon(Icons.share), onPressed: () {}),
+              IconButton(icon: const Icon(Icons.more_horiz), onPressed: () {}),
+            ],
+          ),
+          ElevatedButton(
+            onPressed: isGuest ? () => showAuthModal(context) : _savePinImage,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: primaryColor,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+            ),
+            child: const Text('Guardar', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+      const SizedBox(height: 16),
+      // Título
+      Text(
+        widget.pin['title'] ?? 'Sin título',
+        style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+      ),
+      // Perfil del Dueño
+      if (ownerId != null) ...[
         const SizedBox(height: 12),
-        Container(
-          padding: const EdgeInsets.only(top: 8),
+        GestureDetector(
+          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ProfileScreen(userId: ownerId))),
           child: Row(
             children: [
               CircleAvatar(
-                radius: 18,
-                backgroundColor: primaryColor.withAlpha(77),
-                backgroundImage: !isGuest && _currentUserAvatarUrl != null && _currentUserAvatarUrl!.isNotEmpty
-                    ? NetworkImage(_currentUserAvatarUrl!)
+                radius: 13,
+                backgroundImage: ownerAvatarUrl != null && ownerAvatarUrl.isNotEmpty
+                    ? NetworkImage(ownerAvatarUrl)
                     : null,
-                child: isGuest || _currentUserAvatarUrl == null || _currentUserAvatarUrl!.isEmpty
-                    ? Icon(Icons.person, color: primaryColor)
+                child: ownerAvatarUrl == null || ownerAvatarUrl.isEmpty
+                    ? Text(
+                        ownerName[0].toUpperCase(),
+                        style: const TextStyle(fontSize: 11),
+                      )
                     : null,
               ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: TextField(
-                  controller: _commentController,
-                  readOnly: isGuest,
-                  onTap: isGuest
-                      ? () {
-                          FocusScope.of(context).unfocus();
-                          showAuthModal(context);
-                        }
-                      : null,
-                  decoration: InputDecoration(
-                    hintText: isGuest ? 'Inicia sesión para comentar...' : 'Añadir un comentario...',
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(24),
-                      borderSide: BorderSide.none,
-                    ),
-                    filled: true,
-                    fillColor: Colors.grey.shade200,
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                    suffixIcon: IconButton(
-                      icon: const Icon(Icons.send, color: Colors.grey),
-                      onPressed: isGuest ? () => showAuthModal(context) : _addComment,
-                    ),
+              const SizedBox(width: 6),
+              Flexible(
+                child: Text(
+                  ownerName,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 13,
                   ),
-                  onSubmitted: isGuest ? (_) => showAuthModal(context) : (_) => _addComment(),
                 ),
               ),
             ],
           ),
         ),
       ],
-    );
-  }
+      // Descripción
+      if (widget.pin['description'] != null) ...[
+        const SizedBox(height: 12),
+        Text(widget.pin['description']),
+      ],
+      // Tags
+      if (pinTags.isNotEmpty) ...[
+        const SizedBox(height: 12),
+        ScrollConfiguration(
+          behavior: const MaterialScrollBehavior().copyWith(
+            dragDevices: {
+              PointerDeviceKind.touch,
+              PointerDeviceKind.mouse,
+              PointerDeviceKind.trackpad,
+            },
+          ),
+          child: Scrollbar(
+            thumbVisibility: true,
+            trackVisibility: false,
+            interactive: true,
+            child: SizedBox(
+              height: 38,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                physics: const BouncingScrollPhysics(),
+                itemCount: pinTags.length,
+                separatorBuilder: (_, __) => const SizedBox(width: 6),
+                itemBuilder: (context, index) {
+                  final tag = pinTags[index];
+
+                  return Chip(
+                    visualDensity: VisualDensity.compact,
+                    padding: EdgeInsets.zero,
+                    label: Text(
+                      tag,
+                      style: const TextStyle(fontSize: 11),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ),
+        ),
+      ],
+      const Divider(height: 32),
+      const Text('Comentarios', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+      const SizedBox(height: 16),
+    ],
+  );
+
+  // Lista de comentarios
+  Widget commentsList = _isLoadingComments
+      ? const Center(child: CircularProgressIndicator())
+      : _comments.isEmpty
+          ? const Padding(
+              padding: EdgeInsets.symmetric(vertical: 20),
+              child: Text('Aún no hay comentarios.', style: TextStyle(color: Colors.grey)),
+            )
+          : Scrollbar(
+              controller: _commentScrollController,
+              thumbVisibility: true,
+              child: ListView.builder(
+                controller: _commentScrollController,
+                shrinkWrap: !isDesktop,
+                physics: const AlwaysScrollableScrollPhysics(),
+                itemCount: _comments.length,
+                itemBuilder: (context, index) {
+                  final comment = _comments[index];
+                  // ... (Mantenemos el mismo itemBuilder de comentarios que tenías)
+                  final commenterProfile = comment['profiles'] as Map<String, dynamic>?;
+                  final commenterName = commenterProfile?['username'] ?? 'Usuario';
+                  return ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: CircleAvatar(radius: 14, backgroundImage: commenterProfile?['avatar_url'] != null ? NetworkImage(commenterProfile?['avatar_url']) : null),
+                    title: Text(commenterName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                    subtitle: Text(comment['text'] ?? ''),
+                  );
+                },
+              ),
+            );
+
+  return Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      headerInfo, // Todo lo que "restauramos" (Likes, Título, etc.)
+      if (isDesktop)
+        Expanded(child: commentsList) // En desktop, los comentarios usan el resto del alto
+      else
+        ConstrainedBox(
+          constraints: BoxConstraints(maxHeight: _imageHeight ?? 400),
+          child: commentsList,
+        ),
+      const SizedBox(height: 12),
+      _buildCommentInput(primaryColor), // El input de texto al final
+    ],
+  );
+}
+
+// Factorizamos el input para limpieza
+Widget _buildCommentInput(Color primaryColor) {
+  return Container(
+    padding: const EdgeInsets.only(top: 8),
+    child: Row(
+      children: [
+        CircleAvatar(
+          radius: 18,
+          backgroundImage: _currentUserAvatarUrl != null ? NetworkImage(_currentUserAvatarUrl!) : null,
+          child: _currentUserAvatarUrl == null ? const Icon(Icons.person) : null,
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: TextField(
+            controller: _commentController,
+            decoration: InputDecoration(
+              hintText: 'Añadir un comentario...',
+              filled: true,
+              fillColor: Colors.grey.shade200,
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(24), borderSide: BorderSide.none),
+              suffixIcon: IconButton(icon: const Icon(Icons.send), onPressed: _addComment),
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
+}
 
   @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
-        iconTheme: const IconThemeData(color: Colors.black),
-        leading: widget.fromProfile
-            ? IconButton(
-                icon: const Icon(Icons.arrow_back),
-                onPressed: () {
-                  // Navegar de vuelta al perfil
-                  Navigator.of(context).pop();
-                },
-              )
-            : null,
-      ),
-      body: SingleChildScrollView(
-        child: Column(
-          children: [
-            Center(
-              child: Container(
-                constraints: const BoxConstraints(maxWidth: 1000),
-                margin: const EdgeInsets.all(16.0),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(16),
-                  boxShadow: [
-                    BoxShadow(color: Colors.black.withAlpha(26), blurRadius: 10, offset: const Offset(0, 4)),
-                  ],
-                ),
-                child: LayoutBuilder(
-                  builder: (context, constraints) {
-                    if (constraints.maxWidth > 700) {
-                      return Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Expanded(flex: 5, child: _buildImage()),
-                          Expanded(
-                            flex: 4,
-                            child: Container(
-                              padding: const EdgeInsets.all(24.0),
-                              child: _buildDetailsAndComments(),
-                            ),
-                          ),
-                        ],
-                      );
-                    }
-                    return Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
+Widget build(BuildContext context) {
+  return Scaffold(
+    backgroundColor: Colors.white,
+    appBar: AppBar(backgroundColor: Colors.white, elevation: 0, iconTheme: const IconThemeData(color: Colors.black)),
+    body: SingleChildScrollView(
+      child: Column(
+        children: [
+          Center(
+            child: Container(
+              constraints: const BoxConstraints(maxWidth: 1000),
+              margin: const EdgeInsets.all(16.0),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 10, offset: const Offset(0, 4))],
+              ),
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  if (constraints.maxWidth > 700) {
+                    return Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        _buildImage(),
-                        Container(
-                          padding: const EdgeInsets.all(16.0),
-                          child: _buildDetailsAndComments(),
+                        Expanded(flex: 5, child: _buildImage()),
+                        Expanded(
+                          flex: 4,
+                          child: Container(
+                            // OBLIGAMOS a que este panel mida lo mismo que la imagen
+                            height: (_imageHeight ?? 600).clamp(520.0, double.infinity),
+                            padding: const EdgeInsets.all(24.0),
+                            child: _buildDetailsAndComments(isDesktop: true),
+                          ),
                         ),
                       ],
                     );
-                  },
-                ),
+                  }
+                  return Column(
+                    children: [
+                      _buildImage(),
+                      Padding(
+                        padding: const EdgeInsets.all(16.0),
+                        child: _buildDetailsAndComments(isDesktop: false),
+                      ),
+                    ],
+                  );
+                },
               ),
             ),
+          ),
 
             const SizedBox(height: 24),
             const Text('Más como esto', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),

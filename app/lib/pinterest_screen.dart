@@ -59,9 +59,9 @@ class PinterestScreenState extends State<PinterestScreen> {
     setState(() => _isLoading = true);
     try {
       final pinResponse = await _supabase
-          .from('pins')
-          .select('id,title,image_url,height,created_at, user_id, profiles(username, avatar_url)') 
-          .order('created_at', ascending: false);
+        .from('pins')
+        .select('id,title,image_url,width,height,created_at, user_id, profiles(username, avatar_url)') // Agregamos width
+        .order('created_at', ascending: false);
 
       final pins = List<Map<String, dynamic>>.from(pinResponse as List);
       final pinIds = pins.map((pin) => pin['id'] as int).toList();
@@ -122,26 +122,34 @@ class PinterestScreenState extends State<PinterestScreen> {
   }
 
   Future<void> _uploadPin(XFile image, String title, List<String> tags) async {
-    try {
-      final fileExt = image.name.split('.').last;
-      final fileName = '${DateTime.now().millisecondsSinceEpoch}.$fileExt';
+  try {
+    final fileExt = image.name.split('.').last;
+    final fileName = '${DateTime.now().millisecondsSinceEpoch}.$fileExt';
 
-      if (kIsWeb) {
-        final bytes = await image.readAsBytes();
-        await _supabase.storage.from('images').uploadBinary(fileName, bytes);
-      } else {
-        final file = File(image.path);
-        await _supabase.storage.from('images').upload(fileName, file);
-      }
+    // 1. OBTENER DIMENSIONES REALES
+    final bytes = await image.readAsBytes();
+    final decodedImage = await decodeImageFromList(bytes);
+    final double realWidth = decodedImage.width.toDouble();
+    final double realHeight = decodedImage.height.toDouble();
 
-      final imageUrl = _supabase.storage.from('images').getPublicUrl(fileName);
+    // 2. SUBIR A STORAGE
+    if (kIsWeb) {
+      await _supabase.storage.from('images').uploadBinary(fileName, bytes);
+    } else {
+      final file = File(image.path);
+      await _supabase.storage.from('images').upload(fileName, file);
+    }
 
-      final pinResponse = await _supabase.from('pins').insert({
-        'title': title,
-        'image_url': imageUrl,
-        'height': 200.0 + Random().nextInt(200), 
-        'user_id': _supabase.auth.currentUser!.id, 
-      }).select('id');
+    final imageUrl = _supabase.storage.from('images').getPublicUrl(fileName);
+
+    // 3. GUARDAR EN DB (Usando dimensiones reales, no random)
+    final pinResponse = await _supabase.from('pins').insert({
+      'title': title,
+      'image_url': imageUrl,
+      'width': realWidth,   // <-- Importante
+      'height': realHeight, // <-- Importante
+      'user_id': _supabase.auth.currentUser!.id, 
+    }).select('id');
 
       final pinRows = List<Map<String, dynamic>>.from(pinResponse as List);
       final pinId = pinRows.isNotEmpty ? pinRows.first['id'] as int? : null;
@@ -567,178 +575,232 @@ class PinterestScreenState extends State<PinterestScreen> {
       body: Padding(
         padding: const EdgeInsets.all(8.0),
         child: _isLoading
-          ? Center(child: CircularProgressIndicator(color: Theme.of(context).primaryColor))
-          : Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                if (_selectedTagFilters.isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 8.0),
-                    child: Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: [
-                        ..._selectedTagFilters.map((tag) => FilterChip(
-                              label: Text(tag),
-                              selected: true,
-                              onSelected: (_) => _toggleTagFilter(tag),
-                            )),
-                        ActionChip(
-                          label: const Text('Borrar filtros'),
-                          onPressed: _clearTagFilters,
-                        ),
-                      ],
-                    ),
-                  ),
-                Expanded(
-                  child: _filteredPins.isEmpty
-                    ? Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            const Icon(Icons.image_not_supported, size: 64, color: Colors.grey),
-                            const SizedBox(height: 16),
-                            const Text('No se encontraron publicaciones.'),
-                            TextButton(
-                              onPressed: _fetchPins,
-                              child: Text('Recargar', style: TextStyle(color: Theme.of(context).primaryColor)),
-                            ),
-                          ],
-                        ),
-                      )
-                    : RefreshIndicator(
-                        onRefresh: _fetchPins,
-                        color: Theme.of(context).primaryColor,
-                        child: MasonryGridView.count(
-                            crossAxisCount: MediaQuery.of(context).size.width > 600 ? 3 : 2,
-                            mainAxisSpacing: 8.0,
-                            crossAxisSpacing: 8.0,
-                            itemCount: _filteredPins.length,
-                            itemBuilder: (context, index) {
-                              final pin = _filteredPins[index];
-                              final pinTags = List<String>.from(pin['tags'] as List? ?? []);
-                              final ownerProfile = pin['profiles'] as Map<String, dynamic>?;
-                              final ownerAvatarUrl = ownerProfile?['avatar_url'] as String?;
-
-                              return GestureDetector(
-                                onTap: () {
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (context) => PinDetailScreen(pin: pin),
-                                    ),
-                                  );
-                                },
-                                child: Container(
-                                  height: (pin['height'] as num?)?.toDouble() ?? 250.0,
-                                  decoration: BoxDecoration(
-                                    borderRadius: BorderRadius.circular(12.0),
-                                    color: Colors.grey.shade300,
-                                    image: DecorationImage(
-                                      image: NetworkImage(pin['image_url']),
-                                      fit: BoxFit.cover,
-                                    ),
-                                  ),
-                                  child: Stack(
-                                    children: [
-                                      Align(
-                                        alignment: Alignment.topLeft,
-                                        child: Container(
-                                          margin: const EdgeInsets.all(8.0),
-                                          padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
-                                          decoration: BoxDecoration(
-                                            color: Colors.black45,
-                                            borderRadius: BorderRadius.circular(12.0),
-                                          ),
-                                          child: Text(
-                                            pin['title'] ?? 'Sin título',
-                                            style: const TextStyle(color: Colors.white, fontSize: 12),
-                                          ),
-                                        ),
-                                      ),
-                                      Positioned(
-                                        top: 8,
-                                        right: 8,
-                                        child: CircleAvatar(
-                                          radius: 16,
-                                          backgroundColor: Colors.white70,
-                                          child: CircleAvatar(
-                                            radius: 14,
-                                            backgroundColor: Colors.grey.shade300,
-                                            backgroundImage: ownerAvatarUrl != null && ownerAvatarUrl.isNotEmpty
-                                                ? NetworkImage(ownerAvatarUrl)
-                                                : null,
-                                            child: ownerAvatarUrl == null || ownerAvatarUrl.isEmpty
-                                                ? Text(
-                                                    (ownerProfile?['username'] ?? ownerProfile?['full_name'] ?? 'U')[0].toString().toUpperCase(),
-                                                    style: const TextStyle(fontSize: 12),
-                                                  )
-                                                : null,
-                                          ),
-                                        ),
-                                      ),
-                                      if (pinTags.isNotEmpty)
-                                        Positioned(
-                                          left: 8,
-                                          right: 8,
-                                          bottom: 8,
-                                          child: Wrap(
-                                            spacing: 4,
-                                            runSpacing: 4,
-                                            children: pinTags.take(3).map((tag) {
-                                              return GestureDetector(
-                                                onTap: () => _toggleTagFilter(tag),
-                                                child: Container(
-                                                  padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
-                                                  decoration: BoxDecoration(
-                                                    color: Colors.black54,
-                                                    borderRadius: BorderRadius.circular(12.0),
-                                                  ),
-                                                  child: Text(
-                                                    tag,
-                                                    style: const TextStyle(color: Colors.white, fontSize: 10),
-                                                  ),
-                                                ),
-                                              );
-                                            }).toList(),
-                                          ),
-                                        ),
-                                      Positioned(
-                                        bottom: pinTags.isNotEmpty ? 40 : 8,
-                                        right: 8,
-                                        child: Container(
-                                          padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
-                                          decoration: BoxDecoration(
-                                            color: Colors.black54,
-                                            borderRadius: BorderRadius.circular(12.0),
-                                          ),
-                                          child: Row(
-                                            mainAxisSize: MainAxisSize.min,
-                                            children: [
-                                              const Icon(
-                                                Icons.favorite,
-                                                color: Colors.white,
-                                                size: 14,
-                                              ),
-                                              const SizedBox(width: 4),
-                                              Text(
-                                                '${pin['like_count'] ?? 0}',
-                                                style: const TextStyle(color: Colors.white, fontSize: 12),
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              );
-                            },
+            ? Center(child: CircularProgressIndicator(color: Theme.of(context).primaryColor))
+            : Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (_selectedTagFilters.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 8.0),
+                      child: Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          ..._selectedTagFilters.map((tag) => FilterChip(
+                                label: Text(tag),
+                                selected: true,
+                                onSelected: (_) => _toggleTagFilter(tag),
+                              )),
+                          ActionChip(
+                            label: const Text('Borrar filtros'),
+                            onPressed: _clearTagFilters,
                           ),
+                        ],
                       ),
-                ),
-              ],
-            ),
+                    ),
+                  Expanded(
+                    child: _filteredPins.isEmpty
+                        ? Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                const Icon(Icons.image_not_supported, size: 64, color: Colors.grey),
+                                const SizedBox(height: 16),
+                                const Text('No se encontraron publicaciones.'),
+                                TextButton(
+                                  onPressed: _fetchPins,
+                                  child: Text('Recargar', style: TextStyle(color: Theme.of(context).primaryColor)),
+                                ),
+                              ],
+                            ),
+                          )
+                        : RefreshIndicator(
+                            onRefresh: _fetchPins,
+                            color: Theme.of(context).primaryColor,
+                            child: MasonryGridView.count(
+                              crossAxisCount: MediaQuery.of(context).size.width > 600 ? 4 : 2,
+                              mainAxisSpacing: 8.0,
+                              crossAxisSpacing: 8.0,
+                              itemCount: _filteredPins.length,
+                              itemBuilder: (context, index) {
+                                final pin = _filteredPins[index];
+                                final pinTags = List<String>.from(pin['tags'] as List? ?? []);
+                                final ownerProfile = pin['profiles'] as Map<String, dynamic>?;
+                                // final ownerAvatarUrl = ownerProfile?['avatar_url'] as String?;
+
+                                final double width = (pin['width'] as num?)?.toDouble() ?? 0;
+                                final double height = (pin['height'] as num?)?.toDouble() ?? 0;
+                                double aspectRatio = width / height;
+
+                                if (width > 0 && height > 0) {
+                                  aspectRatio = width / height;
+                                  aspectRatio = aspectRatio.clamp(0.6, 1.5); 
+                                  print(aspectRatio);
+                                } else {
+                                  aspectRatio = 0.8; 
+                                }
+
+                                return GestureDetector(
+                                  onTap: () {
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (context) => PinDetailScreen(pin: pin),
+                                      ),
+                                    );
+                                  },
+                                  child: ClipRRect(
+                                    borderRadius: BorderRadius.circular(12.0),
+                                    child: Container(
+                                      color: Colors.grey.shade300,
+                                      child: Stack(
+                                        children: [
+                                          // USAMOS ASPECTRATIO PARA DEFINIR EL TAMAÑO DINÁMICO
+                                          AspectRatio(
+                                            aspectRatio: aspectRatio,
+                                            child: Image.network(
+                                              pin['image_url'],
+                                              fit: BoxFit.cover,
+                                              // Previene saltos visuales mientras carga
+                                              loadingBuilder: (context, child, loadingProgress) {
+                                                if (loadingProgress == null) return child;
+                                                return Container(color: Colors.grey.shade200);
+                                              },
+                                            ),
+                                          ),
+                                          
+                                          // OVERLAYS (Título)
+                                          Positioned(
+                                            top: 8,
+                                            left: 8,
+                                            child: Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
+                                              decoration: BoxDecoration(
+                                                color: Colors.black45,
+                                                borderRadius: BorderRadius.circular(12.0),
+                                              ),
+                                              child: Text(
+                                                pin['title'] ?? 'Sin título',
+                                                style: const TextStyle(color: Colors.white, fontSize: 10),
+                                              ),
+                                            ),
+                                          ),
+
+                                          // AVATAR DEL DUEÑO
+                                          
+
+                                          // TAGS Y LIKES (Seccion Inferior)
+                                          Positioned(
+                                            bottom: 0,
+                                            left: 0,
+                                            right: 0,
+                                            child: Container(
+                                              decoration: const BoxDecoration(
+                                                gradient: LinearGradient(
+                                                  begin: Alignment.topCenter,
+                                                  end: Alignment.bottomCenter,
+                                                  colors: [Colors.transparent, Colors.black54],
+                                                ),
+                                              ),
+                                              padding: const EdgeInsets.all(8.0),
+                                              child: Row(
+                                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                                children: [
+                                                  // Tags (Máximo 4 para no saturar)
+                                                  if (pinTags.isNotEmpty)
+                                                    Row(
+                                                      mainAxisSize:
+                                                          MainAxisSize.min,
+                                                      children: [
+                                                        ...List.generate(
+                                                          pinTags.length > 4
+                                                              ? 4
+                                                              : pinTags.length,
+                                                          (index) => Padding(
+                                                            padding:
+                                                                EdgeInsets.only(
+                                                                  right:
+                                                                      index == 3
+                                                                      ? 0
+                                                                      : 4,
+                                                                ),
+                                                            child: Container(
+                                                              padding:
+                                                                  const EdgeInsets.symmetric(
+                                                                    horizontal:
+                                                                        6,
+                                                                    vertical: 2,
+                                                                  ),
+                                                              decoration:
+                                                                  BoxDecoration(
+                                                                    color: Colors
+                                                                        .white24,
+                                                                    borderRadius:
+                                                                        BorderRadius.circular(
+                                                                          8,
+                                                                        ),
+                                                                  ),
+                                                              child: Text(
+                                                                '#${pinTags[index]}',
+                                                                style: const TextStyle(
+                                                                  color: Colors
+                                                                      .white,
+                                                                  fontSize: 9,
+                                                                ),
+                                                              ),
+                                                            ),
+                                                          ),
+                                                        ),
+
+                                                        // Mostrar "..." si hay más de 4 tags
+                                                        if (pinTags.length > 4)
+                                                          Container(
+                                                            padding:
+                                                                const EdgeInsets.symmetric(
+                                                                  horizontal: 6,
+                                                                  vertical: 2,
+                                                                ),
+                                                            decoration:
+                                                                BoxDecoration(
+                                                                  color: Colors
+                                                                      .white24,
+                                                                  borderRadius:
+                                                                      BorderRadius.circular(
+                                                                        8,
+                                                                      ),
+                                                                ),
+                                                            child: const Text(
+                                                              '...',
+                                                              style: TextStyle(
+                                                                color: Colors
+                                                                    .white,
+                                                                fontSize: 9,
+                                                                fontWeight:
+                                                                    FontWeight
+                                                                        .bold,
+                                                              ),
+                                                            ),
+                                                          ),
+                                                      ],
+                                                    ),
+                                                  
+                                                  // Contador de Likes
+                                                  
+                                                ],
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+                          ),
+                  ),
+                ],
+              ),
       ),
     );
   }
