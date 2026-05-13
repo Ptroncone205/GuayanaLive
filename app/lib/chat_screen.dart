@@ -356,20 +356,74 @@ class ChatScreenState extends State<ChatScreen> {
       child: message.type == 'image'
           ? Column(
               crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
               children: [
-                if (message.imagePath != null) ...[
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(12.0),
-                    child: kIsWeb
-                        ? Image.network(message.imagePath!, fit: BoxFit.cover)
-                        : Image.file(
-                            File(message.imagePath!),
-                            fit: BoxFit.cover,
+                if (message.imagePath != null)
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: isUser
+                          ? Colors.white.withOpacity(0.12)
+                          : Colors.grey.shade300,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: kIsWeb
+                              ? Image.network(
+                                  message.imagePath!,
+                                  width: 42,
+                                  height: 42,
+                                  fit: BoxFit.cover,
+                                )
+                              : Image.file(
+                                  File(message.imagePath!),
+                                  width: 42,
+                                  height: 42,
+                                  fit: BoxFit.cover,
+                                ),
+                        ),
+
+                        const SizedBox(width: 10),
+
+                        Flexible(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                message.imagePath!.split('/').last,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  color: textColor,
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 12,
+                                ),
+                              ),
+
+                              const SizedBox(height: 2),
+
+                              Text(
+                                '.${_pendingImagePath!.split('.').last.toUpperCase()}',
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ],
                           ),
+                        ),
+                      ],
+                    ),
                   ),
+
+                if (message.text.isNotEmpty) ...[
                   const SizedBox(height: 8),
+                  Text(message.text, style: TextStyle(color: textColor)),
                 ],
-                Text(message.text, style: TextStyle(color: textColor)),
               ],
             )
           : Text(message.text, style: TextStyle(color: textColor)),
@@ -411,38 +465,63 @@ class ChatScreenState extends State<ChatScreen> {
           ),
           if (_pendingImagePath != null)
             Container(
-              color: Colors.grey.shade100,
-              padding: const EdgeInsets.symmetric(
-                horizontal: 12.0,
-                vertical: 10.0,
+              margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              decoration: BoxDecoration(
+                color: Colors.grey.shade100,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: Colors.grey.shade300),
               ),
               child: Row(
                 children: [
                   ClipRRect(
-                    borderRadius: BorderRadius.circular(12.0),
+                    borderRadius: BorderRadius.circular(10),
                     child: kIsWeb
                         ? Image.network(
                             _pendingImagePath!,
-                            width: 64,
-                            height: 64,
+                            width: 46,
+                            height: 46,
                             fit: BoxFit.cover,
                           )
                         : Image.file(
                             File(_pendingImagePath!),
-                            width: 64,
-                            height: 64,
+                            width: 46,
+                            height: 46,
                             fit: BoxFit.cover,
                           ),
                   ),
+
                   const SizedBox(width: 12),
-                  const Expanded(
-                    child: Text(
-                      'Imagen seleccionada. Escribe un mensaje para enviarla junto con la solicitud.',
-                      style: TextStyle(fontSize: 14),
+
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          _pendingImagePath!.split('/').last,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w600,
+                            fontSize: 13,
+                          ),
+                        ),
+
+                        const SizedBox(height: 2),
+
+                        Text(
+                          '.${_pendingImagePath!.split('.').last.toUpperCase()}',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
+
                   IconButton(
-                    icon: const Icon(Icons.close, color: Colors.green),
+                    icon: const Icon(Icons.close, color: Colors.grey, size: 20),
                     onPressed: _removePendingImage,
                   ),
                 ],

@@ -934,14 +934,19 @@ class PinterestScreenState extends State<PinterestScreen> {
                                 }
 
                                 return GestureDetector(
-                                  onTap: () {
-                                    Navigator.push(
+                                  onTap: () async {
+                                    await Navigator.push(
                                       context,
                                       MaterialPageRoute(
                                         builder: (context) =>
                                             PinDetailScreen(pin: pin),
                                       ),
                                     );
+
+                                    // Reload pins after returning
+                                    if (mounted) {
+                                      await _fetchPins();
+                                    }
                                   },
                                   child: ClipRRect(
                                     borderRadius: BorderRadius.circular(12.0),

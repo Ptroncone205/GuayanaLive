@@ -619,24 +619,52 @@ Widget _buildDetailsAndComments({required bool isDesktop}) {
                   final currentUserId = _supabase.auth.currentUser?.id;
                   final isMyComment = currentUserId != null && comment['user_id'] == currentUserId;
 
-                  return ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    leading: CircleAvatar(radius: 14, backgroundImage: commenterProfile?['avatar_url'] != null ? NetworkImage(commenterProfile?['avatar_url']) : null),
-                    title: Text(commenterName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                    subtitle: Text(comment['text'] ?? ''),
-                    trailing: isMyComment
-                      ? IconButton(
-                          icon: const Icon(
-                            Icons.delete_outline,
-                            size: 18,
-                            color: Colors.grey,
-                          ),
-                          onPressed: () => _deleteComment(comment['id']),
-                          constraints: const BoxConstraints(),
-                          padding: EdgeInsets.zero,
-                        )
-                      : null,
-                  );
+                  return InkWell(
+  borderRadius: BorderRadius.circular(12),
+  onTap: () {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ProfileScreen(
+          userId: comment['user_id'],
+        ),
+      ),
+    );
+  },
+  child: ListTile(
+    contentPadding: EdgeInsets.zero,
+
+    leading: CircleAvatar(
+      radius: 14,
+      backgroundImage: commenterProfile?['avatar_url'] != null
+          ? NetworkImage(commenterProfile?['avatar_url'])
+          : null,
+    ),
+
+    title: Text(
+      commenterName,
+      style: const TextStyle(
+        fontWeight: FontWeight.bold,
+        fontSize: 13,
+      ),
+    ),
+
+    subtitle: Text(comment['text'] ?? ''),
+
+    trailing: isMyComment
+        ? IconButton(
+            icon: const Icon(
+              Icons.delete_outline,
+              size: 18,
+              color: Colors.grey,
+            ),
+            onPressed: () => _deleteComment(comment['id']),
+            constraints: const BoxConstraints(),
+            padding: EdgeInsets.zero,
+          )
+        : null,
+  ),
+);
                 },
               ),
             );

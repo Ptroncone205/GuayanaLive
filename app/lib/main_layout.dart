@@ -106,19 +106,13 @@ class _MainLayoutState extends State<MainLayout> {
   void _onItemTapped(int index) {
     bool isGuest = Supabase.instance.client.auth.currentUser == null;
 
-    // VERIFICACIÓN DE INVITADO: Bloquear Mapa (3), Mensajes (4) y Perfil (5)
-    if ((index == 3 || index == 5) && isGuest) {
+    if ((index == 4 || index == 2) && isGuest) {
       showAuthModal(context);
       return;
     }
 
-    // Intercept "Add Post" (Index 2) to show the upload options
     if (index == 2) {
-      if (isGuest) {
-        showAuthModal(context);
-      } else {
-        pinterestKey.currentState?.showAddPostOptions();
-      }
+      pinterestKey.currentState?.showAddPostOptions();
       return;
     }
 
@@ -198,26 +192,26 @@ class _MainLayoutState extends State<MainLayout> {
           ),
           _AnimatedNavButton(
             icon: const Icon(Icons.home_outlined, color: Colors.white),
-            activeIcon: const Icon(Icons.home),
+            activeIcon: const Icon(Icons.home, color: Colors.white),
             isSelected: _selectedIndex == 0,
             onTap: () => _onItemTapped(0),
           ),
           _AnimatedNavButton(
             icon: const Icon(Icons.auto_awesome_outlined, color: Colors.white),
-            activeIcon: const Icon(Icons.auto_awesome),
+            activeIcon: const Icon(Icons.auto_awesome, color: Colors.white),
             isSelected: _selectedIndex == 1,
             onTap: () => _onItemTapped(1),
           ),
           _AnimatedNavButton(
             icon: const Icon(Icons.map_outlined, color: Colors.white),
-            activeIcon: const Icon(Icons.map),
+            activeIcon: const Icon(Icons.map, color: Colors.white),
             isSelected: _selectedIndex == 3, // El mapa es el 3
             onTap: () => _onItemTapped(3),
           ),
 
           _AnimatedNavButton(
             icon: const Icon(Icons.textsms_outlined, color: Colors.white),
-            activeIcon: const Icon(Icons.textsms),
+            activeIcon: const Icon(Icons.textsms, color: Colors.white),
             isSelected: _selectedIndex == 4,
             onTap: () => _onItemTapped(4),
           ),
@@ -239,58 +233,65 @@ class _MainLayoutState extends State<MainLayout> {
   Widget _buildBottomNavBar(BuildContext context) {
     final primaryColor = Theme.of(context).primaryColor;
 
-    return Container(
-      height: 60,
-      decoration: BoxDecoration(
-        color: primaryColor,
-        border: Border(
-          top: BorderSide(color: Colors.black.withOpacity(0.05), width: 1),
+    // Wrap the entire container in a SafeArea
+    return SafeArea(
+      // We only care about the bottom padding for the navigation bar
+      top: false,
+      left: false,
+      right: false,
+      bottom: true, 
+      child: Container(
+        height: 60,
+        decoration: BoxDecoration(
+          color: primaryColor,
+          border: Border(
+            top: BorderSide(color: Colors.black.withOpacity(0.05), width: 1),
+          ),
         ),
-      ),
-      child: BottomNavigationBar(
-        backgroundColor: Colors.transparent,
-        type: BottomNavigationBarType.fixed,
-        elevation: 0,
-        currentIndex: _selectedIndex,
-        onTap: _onItemTapped,
-        showSelectedLabels: false,
-        showUnselectedLabels: false,
-        selectedItemColor: Colors.white,
-        unselectedItemColor: Colors.white70,
-        iconSize: 28,
-        // Detailed labels for improved developer readability
-        items: [
-          const BottomNavigationBarItem(
-            icon: Icon(Icons.home_outlined, color: Colors.white),
-            activeIcon: Icon(Icons.home),
-            label: 'Home Feed', // Índice 0
-          ),
-          const BottomNavigationBarItem(
-            icon: Icon(Icons.auto_awesome_outlined, color: Colors.white),
-            activeIcon: Icon(Icons.auto_awesome),
-            label: 'AI Chat', // Índice 1
-          ),
-          const BottomNavigationBarItem(
-            icon: Icon(Icons.add_box_outlined, color: Colors.white),
-            activeIcon: Icon(Icons.add_box),
-            label: 'Add New Post', // Índice 2
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.map_outlined, color: Colors.white),
-            activeIcon: Icon(Icons.map),
-            label: 'Map', // Índice 3
-          ),
-          const BottomNavigationBarItem(
-            icon: Icon(Icons.chat_bubble_outline, color: Colors.white),
-            activeIcon: Icon(Icons.chat_bubble),
-            label: 'User Messages', // Índice 4
-          ),
-          BottomNavigationBarItem(
-            icon: _buildProfileNavIcon(),
-            activeIcon: _buildProfileNavIcon(isActive: true),
-            label: 'Profile',
-          ),
-        ],
+        child: BottomNavigationBar(
+          backgroundColor: Colors.transparent,
+          type: BottomNavigationBarType.fixed,
+          elevation: 0,
+          currentIndex: _selectedIndex,
+          onTap: _onItemTapped,
+          showSelectedLabels: false,
+          showUnselectedLabels: false,
+          selectedItemColor: Colors.white,
+          unselectedItemColor: Colors.white70,
+          iconSize: 28,
+          items: [
+            const BottomNavigationBarItem(
+              icon: Icon(Icons.home_outlined, color: Colors.white),
+              activeIcon: Icon(Icons.home, color: Colors.white),
+              label: 'Home Feed',
+            ),
+            const BottomNavigationBarItem(
+              icon: Icon(Icons.auto_awesome_outlined, color: Colors.white),
+              activeIcon: Icon(Icons.auto_awesome, color: Colors.white),
+              label: 'AI Chat',
+            ),
+            const BottomNavigationBarItem(
+              icon: Icon(Icons.add_box_outlined, color: Colors.white),
+              activeIcon: Icon(Icons.add_box, color: Colors.white),
+              label: 'Add New Post',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.map_outlined, color: Colors.white),
+              activeIcon: Icon(Icons.map, color: Colors.white),
+              label: 'Map',
+            ),
+            const BottomNavigationBarItem(
+              icon: Icon(Icons.textsms_outlined, color: Colors.white),
+              activeIcon: Icon(Icons.textsms, color: Colors.white),
+              label: 'User Messages',
+            ),
+            BottomNavigationBarItem(
+              icon: _buildProfileNavIcon(),
+              activeIcon: _buildProfileNavIcon(isActive: true),
+              label: 'Profile',
+            ),
+          ],
+        ),
       ),
     );
   }

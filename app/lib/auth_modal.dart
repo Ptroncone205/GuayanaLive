@@ -128,14 +128,42 @@ class _AuthModalState extends State<AuthModal> {
         throw Exception('El nombre de usuario ya está en uso');
       }
 
+      // 1. Perform the sign up
       await _supabase.auth.signUp(
         email: email,
         password: password,
         data: {'username': username}, 
       );
       
-      if (widget.isBottomSheet && mounted) {
-        Navigator.of(context).pop();
+      // 2. Show the success message
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('¡Registro exitoso! Por favor, revisa tu correo electrónico para confirmar tu cuenta.'),
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 5), // Give them time to read it
+          ),
+        );
+      }
+
+      // 3. Handle UI navigation
+      if (mounted) {
+        if (widget.isBottomSheet) {
+          // If it's the modal from inside the app, close it
+          Navigator.of(context).pop();
+        } else {
+          // If it's the LoginScreen version, switch back to Login mode 
+          // so they don't try to register again immediately
+          setState(() {
+            _isLogin = true;
+            _isLoading = false;
+          });
+          // Clear registration fields
+          _regEmailController.clear();
+          _regUsernameController.clear();
+          _regPasswordController.clear();
+          _regConfirmPasswordController.clear();
+        }
       }
     } on AuthException catch (error) {
       _showError('Error: ${error.message}');

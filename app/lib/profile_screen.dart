@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 
 import 'auth_modal.dart';
 import 'main.dart'; 
@@ -79,7 +80,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
       final response = await _supabase
           .from('pins')
-          .select('id,title,image_url,height,created_at, user_id, profiles(username, avatar_url)') 
+          .select('id,title,image_url,width,height,created_at, user_id, profiles(username, avatar_url)') 
           .eq('user_id', _targetUserId)
           .order('created_at', ascending: false)
           .limit(9);
@@ -421,9 +422,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ),
 
                     if (!isGuest) ...[
-                      _buildInfoField(label: 'Nombre *', controller: _nameController),
+                      _buildInfoField(label: 'Nombre', controller: _nameController),
                       if (!_isSetupMode)
-                        _buildInfoField(label: 'Usuario (no se puede cambiar)', controller: _usernameController),
+                        _buildInfoField(label: 'Usuario', controller: _usernameController),
                       _buildInfoField(label: 'Biografía', controller: _bioController),
                       _buildInfoField(label: 'Ubicación', controller: _locationController),
                       _buildInfoField(label: 'Sitio web', controller: _websiteController),
@@ -434,36 +435,76 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         Text(_isMyProfile && !isGuest ? 'Tus publicaciones recientes' : 'Publicaciones recientes', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                         const SizedBox(height: 12),
                         if (isGuest)
-                          const Text('No hay publicaciones disponibles para invitados.', style: TextStyle(color: Colors.grey))
+                          const Text('Regístrate para publicar tus descubrimientos.', style: TextStyle(color: Colors.grey))
                         else if (_posts.isEmpty)
                            Text(_isMyProfile ? 'No has subido ninguna publicación.' : 'Sin publicaciones.', style: const TextStyle(color: Colors.grey))
                         else
-                          GridView.count(
-                            crossAxisCount: 3,
-                            mainAxisSpacing: 8,
-                            crossAxisSpacing: 8,
-                            shrinkWrap: true,
-                            physics: const NeverScrollableScrollPhysics(),
-                            children: _posts.map((post) {
-                              return GestureDetector(
-                                onTap: () {
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (context) => PinDetailScreen(
-                                        pin: post,
-                                        fromProfile: true, // Indica que viene del perfil
-                                      ),
+                          MasonryGridView.count(
+                          crossAxisCount:
+                              MediaQuery.of(context).size.width > 700 ? 4 : 3,
+                          mainAxisSpacing: 8,
+                          crossAxisSpacing: 8,
+                          shrinkWrap: true,
+                          physics: const NeverScrollableScrollPhysics(),
+                          itemCount: _posts.length,
+                          itemBuilder: (context, index) {
+                            final post = _posts[index];
+
+                            final double width =
+                                (post['width'] as num?)?.toDouble() ?? 0;
+
+                            final double height =
+                                (post['height'] as num?)?.toDouble() ?? 0;
+
+                            double aspectRatio = 0.8;
+
+                            if (width > 0 && height > 0) {
+                              aspectRatio = width / height;
+                              aspectRatio = aspectRatio.clamp(0.6, 1.5);
+                            }
+
+                            return GestureDetector(
+                              onTap: () async {
+                                await Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) => PinDetailScreen(
+                                      pin: post,
+                                      fromProfile: true,
                                     ),
-                                  );
-                                },
-                                child: ClipRRect(
-                                  borderRadius: BorderRadius.circular(12),
-                                  child: Image.network(post['image_url'], fit: BoxFit.cover),
+                                  ),
+                                );
+
+                                // Reload after returning from details
+                                if (mounted) {
+                                  await _fetchProfileData();
+                                }
+                              },
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(12),
+                                child: Container(
+                                  color: Colors.grey.shade300,
+                                  child: AspectRatio(
+                                    aspectRatio: aspectRatio,
+                                    child: Image.network(
+                                      post['image_url'],
+                                      fit: BoxFit.cover,
+                                      loadingBuilder:
+                                          (context, child, loadingProgress) {
+                                            if (loadingProgress == null)
+                                              return child;
+
+                                            return Container(
+                                              color: Colors.grey.shade200,
+                                            );
+                                          },
+                                    ),
+                                  ),
                                 ),
-                              );
-                            }).toList(),
-                          ),
+                              ),
+                            );
+                          },
+                        ),
                     ]
                   ],
                 ),
