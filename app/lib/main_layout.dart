@@ -104,9 +104,17 @@ class _MainLayoutState extends State<MainLayout> {
   }
 
   void _onItemTapped(int index) {
+    bool isGuest = Supabase.instance.client.auth.currentUser == null;
+
+    // VERIFICACIÓN DE INVITADO: Bloquear Mapa (3), Mensajes (4) y Perfil (5)
+    if ((index == 3 || index == 5) && isGuest) {
+      showAuthModal(context);
+      return;
+    }
+
     // Intercept "Add Post" (Index 2) to show the upload options
     if (index == 2) {
-      if (Supabase.instance.client.auth.currentUser == null) {
+      if (isGuest) {
         showAuthModal(context);
       } else {
         pinterestKey.currentState?.showAddPostOptions();
@@ -143,6 +151,12 @@ class _MainLayoutState extends State<MainLayout> {
               ),
               elevation: 4,
               onPressed: () async {
+                // VERIFICACIÓN DE INVITADO: Bloquear cámara principal
+                if (Supabase.instance.client.auth.currentUser == null) {
+                  showAuthModal(context);
+                  return;
+                }
+
                 final nav = Navigator.of(context);
                 final result = await nav.push<CameraResult>(
                   MaterialPageRoute(builder: (_) => const CameraScreen()),
@@ -155,8 +169,9 @@ class _MainLayoutState extends State<MainLayout> {
                   chatKey.currentState?.setPendingImage(result.imagePath);
                 } else {
                   // Trigger the full post publication flow (location check included)
-                  await pinterestKey.currentState
-                      ?.showUploadFromCameraResult(result.imagePath);
+                  await pinterestKey.currentState?.showUploadFromCameraResult(
+                    result.imagePath,
+                  );
                 }
               },
               child: const Icon(Icons.camera_alt, size: 28),
@@ -183,26 +198,26 @@ class _MainLayoutState extends State<MainLayout> {
           ),
           _AnimatedNavButton(
             icon: const Icon(Icons.home_outlined, color: Colors.white),
-            activeIcon: const Icon(Icons.home, color: Colors.white),
+            activeIcon: const Icon(Icons.home),
             isSelected: _selectedIndex == 0,
             onTap: () => _onItemTapped(0),
           ),
           _AnimatedNavButton(
             icon: const Icon(Icons.auto_awesome_outlined, color: Colors.white),
-            activeIcon: const Icon(Icons.auto_awesome, color: Colors.white),
+            activeIcon: const Icon(Icons.auto_awesome),
             isSelected: _selectedIndex == 1,
             onTap: () => _onItemTapped(1),
           ),
           _AnimatedNavButton(
             icon: const Icon(Icons.map_outlined, color: Colors.white),
-            activeIcon: const Icon(Icons.map, color: Colors.white),
+            activeIcon: const Icon(Icons.map),
             isSelected: _selectedIndex == 3, // El mapa es el 3
             onTap: () => _onItemTapped(3),
           ),
 
           _AnimatedNavButton(
             icon: const Icon(Icons.textsms_outlined, color: Colors.white),
-            activeIcon: const Icon(Icons.textsms, color: Colors.white),
+            activeIcon: const Icon(Icons.textsms),
             isSelected: _selectedIndex == 4,
             onTap: () => _onItemTapped(4),
           ),
@@ -210,7 +225,7 @@ class _MainLayoutState extends State<MainLayout> {
           const Spacer(),
           _AnimatedNavButton(
             icon: const Icon(Icons.add_box_outlined, color: Colors.white),
-            activeIcon: const Icon(Icons.add_box, color: Colors.white),
+            activeIcon: const Icon(Icons.add_box),
             isSelected: false,
             onTap: () =>
                 _onItemTapped(2), // Añadir sigue siendo el 2 (no cambia estado)
@@ -247,27 +262,27 @@ class _MainLayoutState extends State<MainLayout> {
         items: [
           const BottomNavigationBarItem(
             icon: Icon(Icons.home_outlined, color: Colors.white),
-            activeIcon: Icon(Icons.home, color: Colors.white),
+            activeIcon: Icon(Icons.home),
             label: 'Home Feed', // Índice 0
           ),
           const BottomNavigationBarItem(
             icon: Icon(Icons.auto_awesome_outlined, color: Colors.white),
-            activeIcon: Icon(Icons.auto_awesome, color: Colors.white),
+            activeIcon: Icon(Icons.auto_awesome),
             label: 'AI Chat', // Índice 1
           ),
           const BottomNavigationBarItem(
             icon: Icon(Icons.add_box_outlined, color: Colors.white),
-            activeIcon: Icon(Icons.add_box, color: Colors.white),
+            activeIcon: Icon(Icons.add_box),
             label: 'Add New Post', // Índice 2
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.map_outlined, color: Colors.white),
-            activeIcon: Icon(Icons.map, color: Colors.white),
+            activeIcon: Icon(Icons.map),
             label: 'Map', // Índice 3
           ),
           const BottomNavigationBarItem(
             icon: Icon(Icons.chat_bubble_outline, color: Colors.white),
-            activeIcon: Icon(Icons.chat_bubble, color: Colors.white),
+            activeIcon: Icon(Icons.chat_bubble),
             label: 'User Messages', // Índice 4
           ),
           BottomNavigationBarItem(
