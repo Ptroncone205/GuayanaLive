@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -9,7 +11,8 @@ import 'camera_screen.dart';
 import 'auth_modal.dart';
 import 'map_screen.dart'; // Tu nueva pantalla de mapa
 
-final GlobalKey<PinterestScreenState> pinterestKey = GlobalKey<PinterestScreenState>();
+final GlobalKey<PinterestScreenState> pinterestKey =
+    GlobalKey<PinterestScreenState>();
 
 class MainLayout extends StatefulWidget {
   const MainLayout({super.key});
@@ -20,25 +23,82 @@ class MainLayout extends StatefulWidget {
 
 class _MainLayoutState extends State<MainLayout> {
   int _selectedIndex = 0;
+  String? _profileAvatarUrl;
+  late final StreamSubscription<dynamic> _authSubscription;
 
   // The persistent screens in our stack (AQUÍ ESTÁ EL MAPA AÑADIDO)
   final List<Widget> _screens = [
     PinterestScreen(key: pinterestKey), // Stack Index 0
-    const ChatScreen(),                 // Stack Index 1
-    const MapScreen(),                  // Stack Index 2 (Nueva pantalla del mapa)
-    const UserChatScreen(),             // Stack Index 3
-    const ProfileScreen(),              // Stack Index 4
+    const ChatScreen(), // Stack Index 1
+    const MapScreen(), // Stack Index 2 (Nueva pantalla del mapa)
+    const UserChatScreen(), // Stack Index 3
+    const ProfileScreen(), // Stack Index 4
   ];
 
   // Logic to determine which screen from the list above to show
   int get _activeScreenIndex {
     switch (_selectedIndex) {
-      case 0: return 0; // Home Feed
-      case 1: return 1; // AI Chat
-      case 3: return 2; // Map (El índice 2 de navegación está reservado para "Añadir")
-      case 4: return 3; // User Chat
-      case 5: return 4; // Profile
-      default: return 0;
+      case 0:
+        return 0; // Home Feed
+      case 1:
+        return 1; // AI Chat
+      case 3:
+        return 2; // Map (El índice 2 de navegación está reservado para "Añadir")
+      case 4:
+        return 3; // User Chat
+      case 5:
+        return 4; // Profile
+      default:
+        return 0;
+    }
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUserAvatar();
+    _authSubscription = Supabase.instance.client.auth.onAuthStateChange.listen((
+      _,
+    ) {
+      if (mounted) {
+        _loadUserAvatar();
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _authSubscription.cancel();
+    super.dispose();
+  }
+
+  Future<void> _loadUserAvatar() async {
+    final user = Supabase.instance.client.auth.currentUser;
+    if (user == null) {
+      if (_profileAvatarUrl != null) {
+        setState(() => _profileAvatarUrl = null);
+      }
+      return;
+    }
+
+    try {
+      final profile = await Supabase.instance.client
+          .from('profiles')
+          .select('avatar_url')
+          .eq('id', user.id)
+          .maybeSingle();
+      final avatarUrl = profile?['avatar_url'] as String?;
+      if (mounted) {
+        setState(() {
+          _profileAvatarUrl = (avatarUrl != null && avatarUrl.isNotEmpty)
+              ? avatarUrl
+              : null;
+        });
+      }
+    } catch (_) {
+      if (mounted && _profileAvatarUrl != null) {
+        setState(() => _profileAvatarUrl = null);
+      }
     }
   }
 
@@ -50,9 +110,9 @@ class _MainLayoutState extends State<MainLayout> {
       } else {
         pinterestKey.currentState?.showAddPostOptions();
       }
-      return; 
+      return;
     }
-    
+
     setState(() {
       _selectedIndex = index;
     });
@@ -68,54 +128,56 @@ class _MainLayoutState extends State<MainLayout> {
         children: [
           if (isDesktop) _buildSidebar(context),
           Expanded(
-            child: IndexedStack(
-              index: _activeScreenIndex,
-              children: _screens,
-            ),
+            child: IndexedStack(index: _activeScreenIndex, children: _screens),
           ),
         ],
       ),
       // The Scan button now ONLY appears if we are on the Home Feed (_selectedIndex == 0)
-      floatingActionButton: _selectedIndex == 0 
-        ? FloatingActionButton(
-            backgroundColor: primaryColor,
-            foregroundColor: Colors.white,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-            elevation: 4,
-            onPressed: () {
-              Navigator.push(context, MaterialPageRoute(builder: (_) => const CameraScreen()));
-            },
-            child: const Icon(Icons.camera_alt, size: 28),
-          )
-        : null,
+      floatingActionButton: _selectedIndex == 0
+          ? FloatingActionButton(
+              backgroundColor: primaryColor,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              elevation: 4,
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const CameraScreen()),
+                );
+              },
+              child: const Icon(Icons.camera_alt, size: 28),
+            )
+          : null,
       bottomNavigationBar: isDesktop ? null : _buildBottomNavBar(context),
     );
   }
 
   Widget _buildSidebar(BuildContext context) {
     final primaryColor = Theme.of(context).primaryColor;
-    
+
     return Container(
-      width: 80, 
-      color: primaryColor, 
+      width: 80,
+      color: primaryColor,
       child: Column(
         children: [
           const SizedBox(height: 20),
           _AnimatedNavButton(
-            icon: Icons.person_outlined,
-            activeIcon: Icons.person,
-            isSelected: _selectedIndex == 5, // Perfil ahora es el 5
-            onTap: () => _onItemTapped(5),
+            icon: _buildProfileNavIcon(),
+            activeIcon: _buildProfileNavIcon(isActive: true),
+            isSelected: _selectedIndex == 4,
+            onTap: () => _onItemTapped(4),
           ),
           _AnimatedNavButton(
-            icon: Icons.home_outlined,
-            activeIcon: Icons.home,
+            icon: const Icon(Icons.home_outlined),
+            activeIcon: const Icon(Icons.home),
             isSelected: _selectedIndex == 0,
             onTap: () => _onItemTapped(0),
           ),
           _AnimatedNavButton(
-            icon: Icons.auto_awesome_outlined,
-            activeIcon: Icons.auto_awesome,
+            icon: const Icon(Icons.auto_awesome_outlined),
+            activeIcon: const Icon(Icons.auto_awesome),
             isSelected: _selectedIndex == 1,
             onTap: () => _onItemTapped(1),
           ),
@@ -125,18 +187,21 @@ class _MainLayoutState extends State<MainLayout> {
             isSelected: _selectedIndex == 3, // El mapa es el 3
             onTap: () => _onItemTapped(3),
           ),
+
           _AnimatedNavButton(
-            icon: Icons.chat_bubble_outline,
-            activeIcon: Icons.chat_bubble,
-            isSelected: _selectedIndex == 4, // Chat ahora es el 4
+            icon: const Icon(Icons.chat_bubble_outline),
+            activeIcon: const Icon(Icons.chat_bubble),
+            isSelected: _selectedIndex == 4,
             onTap: () => _onItemTapped(4),
           ),
+
           const Spacer(),
           _AnimatedNavButton(
-            icon: Icons.add_box_outlined,
-            activeIcon: Icons.add_box,
+            icon: const Icon(Icons.add_box_outlined),
+            activeIcon: const Icon(Icons.add_box),
             isSelected: false,
-            onTap: () => _onItemTapped(2), // Añadir sigue siendo el 2 (no cambia estado)
+            onTap: () =>
+                _onItemTapped(2), // Añadir sigue siendo el 2 (no cambia estado)
           ),
           const SizedBox(height: 20),
         ],
@@ -151,31 +216,34 @@ class _MainLayoutState extends State<MainLayout> {
       height: 60,
       decoration: BoxDecoration(
         color: primaryColor,
-        border: Border(top: BorderSide(color: Colors.black.withOpacity(0.05), width: 1)),
+        border: Border(
+          top: BorderSide(color: Colors.black.withOpacity(0.05), width: 1),
+        ),
       ),
       child: BottomNavigationBar(
-        backgroundColor: Colors.transparent, 
+        backgroundColor: Colors.transparent,
         type: BottomNavigationBarType.fixed,
         elevation: 0,
         currentIndex: _selectedIndex,
         onTap: _onItemTapped,
-        showSelectedLabels: false, 
-        showUnselectedLabels: false, 
+        showSelectedLabels: false,
+        showUnselectedLabels: false,
         selectedItemColor: Colors.white,
         unselectedItemColor: Colors.white70,
         iconSize: 28,
-        items: const [
-          BottomNavigationBarItem(
+        // Detailed labels for improved developer readability
+        items: [
+          const BottomNavigationBarItem(
             icon: Icon(Icons.home_outlined),
             activeIcon: Icon(Icons.home),
             label: 'Home Feed', // Índice 0
           ),
-          BottomNavigationBarItem(
+          const BottomNavigationBarItem(
             icon: Icon(Icons.auto_awesome_outlined),
             activeIcon: Icon(Icons.auto_awesome),
             label: 'AI Chat', // Índice 1
           ),
-          BottomNavigationBarItem(
+          const BottomNavigationBarItem(
             icon: Icon(Icons.add_box_outlined),
             activeIcon: Icon(Icons.add_box),
             label: 'Add New Post', // Índice 2
@@ -185,25 +253,40 @@ class _MainLayoutState extends State<MainLayout> {
             activeIcon: Icon(Icons.map),
             label: 'Map', // Índice 3
           ),
-          BottomNavigationBarItem(
+          const BottomNavigationBarItem(
             icon: Icon(Icons.chat_bubble_outline),
             activeIcon: Icon(Icons.chat_bubble),
             label: 'User Messages', // Índice 4
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.person_outline),
-            activeIcon: Icon(Icons.person),
-            label: 'Profile', // Índice 5
+            icon: _buildProfileNavIcon(),
+            activeIcon: _buildProfileNavIcon(isActive: true),
+            label: 'Profile',
           ),
         ],
       ),
     );
   }
+
+  Widget _buildProfileNavIcon({bool isActive = false}) {
+    if (_profileAvatarUrl != null) {
+      return CircleAvatar(
+        radius: 14,
+        backgroundImage: NetworkImage(_profileAvatarUrl!),
+      );
+    }
+
+    return Icon(
+      isActive ? Icons.person : Icons.person_outline,
+      size: 24,
+      color: Colors.white,
+    );
+  }
 }
 
 class _AnimatedNavButton extends StatelessWidget {
-  final IconData icon;
-  final IconData activeIcon;
+  final Widget icon;
+  final Widget activeIcon;
   final bool isSelected;
   final VoidCallback onTap;
 
@@ -224,10 +307,10 @@ class _AnimatedNavButton extends StatelessWidget {
         child: AnimatedScale(
           scale: isSelected ? 1.15 : 1.0,
           duration: const Duration(milliseconds: 250),
-          child: Icon(
-            isSelected ? activeIcon : icon,
-            color: Colors.white,
-            size: 30, 
+          child: SizedBox(
+            width: 32,
+            height: 32,
+            child: Center(child: isSelected ? activeIcon : icon),
           ),
         ),
       ),

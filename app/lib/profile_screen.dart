@@ -7,6 +7,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'auth_modal.dart';
 import 'main.dart'; 
 import 'user_chat_screen.dart'; // Importación necesaria para la navegación al chat
+import 'pin_detail_screen.dart'; // Importación para navegar a detalles de pin
 
 class ProfileScreen extends StatefulWidget {
   final String? userId;
@@ -35,7 +36,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   final int _following = 0;
   int _postsCount = 0;
 
-  List<String> _posts = [];
+  List<Map<String, dynamic>> _posts = [];
   final _supabase = Supabase.instance.client;
 
   // Getters de utilidad
@@ -78,14 +79,57 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
       final response = await _supabase
           .from('pins')
-          .select('image_url')
+          .select('id,title,image_url,height,created_at, user_id, profiles(username, avatar_url)') 
           .eq('user_id', _targetUserId)
           .order('created_at', ascending: false)
           .limit(9);
 
+      final pins = List<Map<String, dynamic>>.from(response as List);
+      final pinIds = pins.map((pin) => pin['id'] as int).toList();
+
+      // Obtener tags para cada pin
+      final tagRows = pinIds.isEmpty
+          ? <Map<String, dynamic>>[]
+          : List<Map<String, dynamic>>.from(
+              await _supabase
+                  .from('pin_tags')
+                  .select('pin_id, tags(name)')
+                  .inFilter('pin_id', pinIds) 
+              as List);
+
+      final pinTagsMap = <int, List<String>>{};
+      for (final row in tagRows) {
+        final pinId = row['pin_id'] as int?;
+        final tag = ((row['tags'] as Map<String, dynamic>?)?['name']) as String?;
+        if (pinId != null && tag != null) {
+          pinTagsMap.putIfAbsent(pinId, () => []).add(tag);
+        }
+      }
+
+      // Obtener conteo de likes para cada pin
+      final likeCounts = pinIds.isEmpty
+          ? <int, int>{}
+          : Map<int, int>.fromEntries(
+              (await _supabase
+                  .from('pin_likes')
+                  .select('pin_id')
+                  .inFilter('pin_id', pinIds) as List)
+                  .map((row) => row['pin_id'] as int)
+                  .fold<Map<int, int>>({}, (counts, pinId) {
+                    counts[pinId] = (counts[pinId] ?? 0) + 1;
+                    return counts;
+                  }).entries);
+
       if (mounted) {
         setState(() {
-          _posts = (response as List).map((post) => post['image_url'] as String).toList();
+          _posts = pins.map((pin) {
+            final pinId = pin['id'] as int?;
+            return {
+              ...pin,
+              'tags': pinId != null ? List<String>.from(pinTagsMap[pinId] ?? []) : <String>[],
+              'like_count': pinId != null ? likeCounts[pinId] ?? 0 : 0,
+            };
+          }).toList();
           _postsCount = _posts.length;
           _isLoading = false;
         });
@@ -400,10 +444,23 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             crossAxisSpacing: 8,
                             shrinkWrap: true,
                             physics: const NeverScrollableScrollPhysics(),
-                            children: _posts.map((postUrl) {
-                              return ClipRRect(
-                                borderRadius: BorderRadius.circular(12),
-                                child: Image.network(postUrl, fit: BoxFit.cover),
+                            children: _posts.map((post) {
+                              return GestureDetector(
+                                onTap: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) => PinDetailScreen(
+                                        pin: post,
+                                        fromProfile: true, // Indica que viene del perfil
+                                      ),
+                                    ),
+                                  );
+                                },
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(12),
+                                  child: Image.network(post['image_url'], fit: BoxFit.cover),
+                                ),
                               );
                             }).toList(),
                           ),

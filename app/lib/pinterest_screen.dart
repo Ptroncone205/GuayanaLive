@@ -28,10 +28,10 @@ class PinterestScreenState extends State<PinterestScreen> {
   final ImagePicker _picker = ImagePicker();
   final TextEditingController _searchController = TextEditingController();
   final FocusNode _searchFocusNode = FocusNode();
-  
+
   bool _isSearching = false;
   bool _isLoading = true;
-  
+
   List<Map<String, dynamic>> _pins = [];
   List<Map<String, dynamic>> _filteredPins = [];
   List<String> _existingTags = [];
@@ -40,7 +40,7 @@ class PinterestScreenState extends State<PinterestScreen> {
   final List<String> _draftTags = [];
 
   final _supabase = Supabase.instance.client;
-  
+
   bool get isGuest => _supabase.auth.currentUser == null;
 
   @override
@@ -66,25 +66,46 @@ class PinterestScreenState extends State<PinterestScreen> {
     try {
       final pinResponse = await _supabase
           .from('pins')
-          .select('id,title,image_url,height,created_at, user_id, profiles(username, avatar_url)') 
+          .select(
+            'id,title,image_url,width,height,created_at, user_id, profiles(username, avatar_url)',
+          ) // Agregamos width
           .order('created_at', ascending: false);
 
       final pins = List<Map<String, dynamic>>.from(pinResponse as List);
       final pinIds = pins.map((pin) => pin['id'] as int).toList();
 
+      // Obtener conteo de likes para cada pin
+      final likeCounts = pinIds.isEmpty
+          ? <int, int>{}
+          : Map<int, int>.fromEntries(
+              (await _supabase
+                          .from('pin_likes')
+                          .select('pin_id')
+                          .inFilter('pin_id', pinIds)
+                      as List)
+                  .map((row) => row['pin_id'] as int)
+                  .fold<Map<int, int>>({}, (counts, pinId) {
+                    counts[pinId] = (counts[pinId] ?? 0) + 1;
+                    return counts;
+                  })
+                  .entries,
+            );
+
       final tagRows = pinIds.isEmpty
           ? <Map<String, dynamic>>[]
           : List<Map<String, dynamic>>.from(
               await _supabase
-                  .from('pin_tags')
-                  .select('pin_id, tags(name)')
-                  .inFilter('pin_id', pinIds) 
-              as List);
+                      .from('pin_tags')
+                      .select('pin_id, tags(name)')
+                      .inFilter('pin_id', pinIds)
+                  as List,
+            );
 
       final pinTagsMap = <int, List<String>>{};
       for (final row in tagRows) {
         final pinId = row['pin_id'] as int?;
-        final tag = ((row['tags'] as Map<String, dynamic>?)?['name']) as String?;
+        final tag =
+            ((row['tags'] as Map<String, dynamic>?)?['name']) as String?;
         if (pinId != null && tag != null) {
           pinTagsMap.putIfAbsent(pinId, () => []).add(tag);
         }
@@ -96,7 +117,10 @@ class PinterestScreenState extends State<PinterestScreen> {
           final pinId = pin['id'] as int?;
           return {
             ...pin,
-            'tags': pinId != null ? List<String>.from(pinTagsMap[pinId] ?? []) : <String>[],
+            'tags': pinId != null
+                ? List<String>.from(pinTagsMap[pinId] ?? [])
+                : <String>[],
+            'like_count': pinId != null ? likeCounts[pinId] ?? 0 : 0,
           };
         }).toList();
       });
@@ -112,7 +136,12 @@ class PinterestScreenState extends State<PinterestScreen> {
     }
   }
 
-  Future<void> _uploadPin(XFile image, String title, List<String> tags, bool isFromCamera) async {
+  Future<void> _uploadPin(
+    XFile image,
+    String title,
+    List<String> tags,
+    bool isFromCamera,
+  ) async {
     try {
       Map<String, double>? location = await _extractLocation(image);
 
@@ -123,16 +152,22 @@ class PinterestScreenState extends State<PinterestScreen> {
           builder: (ctx) => AlertDialog(
             title: const Text('Ubicación de la especie'),
             content: const Text(
-                'No pudimos detectar la ubicación en la foto. Para que este avistamiento se registre en el mapa de calor, necesitamos usar la ubicación actual de tu dispositivo. ¿Deseas permitirlo? (Si cancelas, se subirá sin ubicación).'),
+              'No pudimos detectar la ubicación en la foto. Para que este avistamiento se registre en el mapa de calor, necesitamos usar la ubicación actual de tu dispositivo. ¿Deseas permitirlo? (Si cancelas, se subirá sin ubicación).',
+            ),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(ctx, false),
                 child: const Text('No, subir sin ubicación'),
               ),
               ElevatedButton(
-                style: ElevatedButton.styleFrom(backgroundColor: Theme.of(ctx).primaryColor),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Theme.of(ctx).primaryColor,
+                ),
                 onPressed: () => Navigator.pop(ctx, true),
-                child: const Text('Sí, usar mi ubicación', style: TextStyle(color: Colors.white)),
+                child: const Text(
+                  'Sí, usar mi ubicación',
+                  style: TextStyle(color: Colors.white),
+                ),
               ),
             ],
           ),
@@ -144,7 +179,11 @@ class PinterestScreenState extends State<PinterestScreen> {
           } catch (e) {
             if (mounted) {
               ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('Ubicación: ${e.toString().replaceAll('Exception: ', '')}')),
+                SnackBar(
+                  content: Text(
+                    'Ubicación: ${e.toString().replaceAll('Exception: ', '')}',
+                  ),
+                ),
               );
             }
           }
@@ -154,8 +193,14 @@ class PinterestScreenState extends State<PinterestScreen> {
       final fileExt = image.name.split('.').last;
       final fileName = '${DateTime.now().millisecondsSinceEpoch}.$fileExt';
 
+      // 1. OBTENER DIMENSIONES REALES
+      final bytes = await image.readAsBytes();
+      final decodedImage = await decodeImageFromList(bytes);
+      final double realWidth = decodedImage.width.toDouble();
+      final double realHeight = decodedImage.height.toDouble();
+
+      // 2. SUBIR A STORAGE
       if (kIsWeb) {
-        final bytes = await image.readAsBytes();
         await _supabase.storage.from('images').uploadBinary(fileName, bytes);
       } else {
         final file = File(image.path);
@@ -164,14 +209,19 @@ class PinterestScreenState extends State<PinterestScreen> {
 
       final imageUrl = _supabase.storage.from('images').getPublicUrl(fileName);
 
-      final pinResponse = await _supabase.from('pins').insert({
-        'title': title,
-        'image_url': imageUrl,
-        'height': 200.0 + Random().nextInt(200), 
-        'user_id': _supabase.auth.currentUser!.id, 
-        if (location != null) 'latitude': location['latitude'],
-        if (location != null) 'longitude': location['longitude'],
-      }).select('id');
+      // 3. GUARDAR EN DB (Usando dimensiones reales, no random)
+      final pinResponse = await _supabase
+          .from('pins')
+          .insert({
+            'title': title,
+            'image_url': imageUrl,
+            'width': realWidth, // <-- Importante
+            'height': realHeight, // <-- Importante
+            'user_id': _supabase.auth.currentUser!.id,
+            if (location != null) 'latitude': location['latitude'],
+            if (location != null) 'longitude': location['longitude'],
+          })
+          .select('id');
 
       final pinRows = List<Map<String, dynamic>>.from(pinResponse as List);
       final pinId = pinRows.isNotEmpty ? pinRows.first['id'] as int? : null;
@@ -180,15 +230,19 @@ class PinterestScreenState extends State<PinterestScreen> {
         final tagIds = await _ensureTagIds(tags);
 
         if (tagIds.isNotEmpty) {
-          await _supabase.from('pin_tags').insert(
-            tagIds.map((tagId) => {'pin_id': pinId, 'tag_id': tagId}).toList(),
-          );
+          await _supabase
+              .from('pin_tags')
+              .insert(
+                tagIds
+                    .map((tagId) => {'pin_id': pinId, 'tag_id': tagId})
+                    .toList(),
+              );
         }
       }
 
       await _fetchPins();
       await _fetchExistingTags();
-      
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Publicación subida con éxito!')),
@@ -196,28 +250,30 @@ class PinterestScreenState extends State<PinterestScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error al subir: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error al subir: $e')));
       }
     }
   }
 
   Future<Map<String, double>?> _extractLocation(XFile image) async {
-    if (kIsWeb) return null; // EXIF and Geolocator might need specific web handling or be skipped
+    if (kIsWeb)
+      return null; // EXIF and Geolocator might need specific web handling or be skipped
     try {
       final bytes = await image.readAsBytes();
       final data = await readExifFromBytes(bytes);
-      
-      if (data.containsKey('GPS GPSLatitude') && data.containsKey('GPS GPSLongitude')) {
+
+      if (data.containsKey('GPS GPSLatitude') &&
+          data.containsKey('GPS GPSLongitude')) {
         final latTag = data['GPS GPSLatitude'];
         final latRef = data['GPS GPSLatitudeRef'];
         final lngTag = data['GPS GPSLongitude'];
         final lngRef = data['GPS GPSLongitudeRef'];
-        
+
         double? lat = _getDecimalDegrees(latTag, latRef);
         double? lng = _getDecimalDegrees(lngTag, lngRef);
-        
+
         if (lat != null && lng != null) {
           return {'latitude': lat, 'longitude': lng};
         }
@@ -232,7 +288,9 @@ class PinterestScreenState extends State<PinterestScreen> {
     try {
       bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (!serviceEnabled) {
-        throw Exception('El servicio de GPS está desactivado. Por favor enciéndelo en la configuración de Windows/Android.');
+        throw Exception(
+          'El servicio de GPS está desactivado. Por favor enciéndelo en la configuración de Windows/Android.',
+        );
       }
 
       LocationPermission permission = await Geolocator.checkPermission();
@@ -264,11 +322,11 @@ class PinterestScreenState extends State<PinterestScreen> {
         if (val is Ratio) return val.numerator / val.denominator;
         return double.tryParse(val.toString()) ?? 0.0;
       }
-      
+
       final d = parseRatio(values[0]);
       final m = parseRatio(values[1]);
       final s = parseRatio(values[2]);
-      
+
       double degrees = d + (m / 60.0) + (s / 3600.0);
       if (ref != null) {
         final refStr = ref.printable.toUpperCase();
@@ -295,7 +353,7 @@ class PinterestScreenState extends State<PinterestScreen> {
       setState(() {
         _existingTags = tags.map((tag) => tag['name'] as String).toList();
       });
-    } catch (_) { }
+    } catch (_) {}
   }
 
   String _normalizeTag(String tag) {
@@ -303,31 +361,39 @@ class PinterestScreenState extends State<PinterestScreen> {
   }
 
   Future<List<int>> _ensureTagIds(List<String> tags) async {
-    final normalizedTags = tags.map(_normalizeTag).where((tag) => tag.isNotEmpty).toSet().toList();
+    final normalizedTags = tags
+        .map(_normalizeTag)
+        .where((tag) => tag.isNotEmpty)
+        .toSet()
+        .toList();
     if (normalizedTags.isEmpty) return [];
 
     try {
       final existingResponse = await _supabase
           .from('tags')
           .select('id,name')
-          .inFilter('name', normalizedTags); 
+          .inFilter('name', normalizedTags);
 
-      final existingTags = List<Map<String, dynamic>>.from(existingResponse as List);
+      final existingTags = List<Map<String, dynamic>>.from(
+        existingResponse as List,
+      );
       final existingTagNames = existingTags
           .map((tag) => (tag['name'] as String).toLowerCase())
           .toSet();
-      final missingTags = normalizedTags.where((tag) => !existingTagNames.contains(tag)).toList();
+      final missingTags = normalizedTags
+          .where((tag) => !existingTagNames.contains(tag))
+          .toList();
 
       if (missingTags.isNotEmpty) {
-        await _supabase.from('tags').insert(
-          missingTags.map((tag) => {'name': tag}).toList(),
-        );
+        await _supabase
+            .from('tags')
+            .insert(missingTags.map((tag) => {'name': tag}).toList());
       }
 
       final allResponse = await _supabase
           .from('tags')
           .select('id,name')
-          .inFilter('name', normalizedTags); 
+          .inFilter('name', normalizedTags);
 
       final allTags = List<Map<String, dynamic>>.from(allResponse as List);
       if (!mounted) return [];
@@ -338,7 +404,10 @@ class PinterestScreenState extends State<PinterestScreen> {
     }
   }
 
-  void _addDraftTagsFromInput(String input, void Function(void Function()) setDialogState) {
+  void _addDraftTagsFromInput(
+    String input,
+    void Function(void Function()) setDialogState,
+  ) {
     final values = input
         .split(',')
         .map(_normalizeTag)
@@ -374,7 +443,11 @@ class PinterestScreenState extends State<PinterestScreen> {
     _filterPins(_searchController.text);
   }
 
-  Future<void> _generateWithAI(XFile image, TextEditingController titleController, void Function(void Function()) setDialogState) async {
+  Future<void> _generateWithAI(
+    XFile image,
+    TextEditingController titleController,
+    void Function(void Function()) setDialogState,
+  ) async {
     setDialogState(() => _isLoading = true);
     try {
       final bytes = await image.readAsBytes();
@@ -391,17 +464,19 @@ class PinterestScreenState extends State<PinterestScreen> {
     } catch (e) {
       debugPrint('Error en IA: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error al procesar con IA: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error al procesar con IA: $e')));
       }
     } finally {
       setDialogState(() => _isLoading = false);
     }
   }
 
-
-  Future<void> _showUploadDialog(XFile image, {bool isFromCamera = false}) async {
+  Future<void> _showUploadDialog(
+    XFile image, {
+    bool isFromCamera = false,
+  }) async {
     final titleController = TextEditingController();
     _tagController.clear();
     setState(() => _draftTags.clear());
@@ -418,8 +493,11 @@ class PinterestScreenState extends State<PinterestScreen> {
             final tagSuggestions = query.isEmpty
                 ? <String>[]
                 : _existingTags
-                    .where((tag) => tag.contains(query) && !_draftTags.contains(tag))
-                    .toList();
+                      .where(
+                        (tag) =>
+                            tag.contains(query) && !_draftTags.contains(tag),
+                      )
+                      .toList();
 
             return AlertDialog(
               title: const Text('Nueva publicación'),
@@ -434,12 +512,16 @@ class PinterestScreenState extends State<PinterestScreen> {
                             height: 150,
                             width: 300,
                             fit: BoxFit.cover,
-                            errorBuilder: (context, error, stackTrace) => Container(
-                              height: 150,
-                              width: 300,
-                              color: Colors.grey.shade300,
-                              child: const Icon(Icons.broken_image, color: Colors.grey),
-                            ),
+                            errorBuilder: (context, error, stackTrace) =>
+                                Container(
+                                  height: 150,
+                                  width: 300,
+                                  color: Colors.grey.shade300,
+                                  child: const Icon(
+                                    Icons.broken_image,
+                                    color: Colors.grey,
+                                  ),
+                                ),
                           )
                         : Image.file(
                             File(image.path),
@@ -455,15 +537,28 @@ class PinterestScreenState extends State<PinterestScreen> {
                       labelText: 'Título de la imagen',
                       border: const OutlineInputBorder(),
                       suffixIcon: IconButton(
-                        icon: isGeneratingAI 
-                            ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
-                            : const Icon(Icons.auto_awesome, color: Colors.purple),
+                        icon: isGeneratingAI
+                            ? const SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Icon(
+                                Icons.auto_awesome,
+                                color: Colors.purple,
+                              ),
                         tooltip: 'Autocompletar con IA',
                         onPressed: isGeneratingAI || isUploading
                             ? null
                             : () async {
                                 setDialogState(() => isGeneratingAI = true);
-                                await _generateWithAI(image, titleController, setDialogState);
+                                await _generateWithAI(
+                                  image,
+                                  titleController,
+                                  setDialogState,
+                                );
                                 setDialogState(() => isGeneratingAI = false);
                               },
                       ),
@@ -479,14 +574,19 @@ class PinterestScreenState extends State<PinterestScreen> {
                       border: const OutlineInputBorder(),
                       suffixIcon: IconButton(
                         icon: const Icon(Icons.add),
-                        onPressed: _tagController.text.trim().isEmpty || isGeneratingAI
+                        onPressed:
+                            _tagController.text.trim().isEmpty || isGeneratingAI
                             ? null
-                            : () => _addDraftTagsFromInput(_tagController.text, setDialogState),
+                            : () => _addDraftTagsFromInput(
+                                _tagController.text,
+                                setDialogState,
+                              ),
                       ),
                     ),
                     textInputAction: TextInputAction.done,
                     onChanged: (_) => setDialogState(() {}),
-                    onSubmitted: (value) => _addDraftTagsFromInput(value, setDialogState),
+                    onSubmitted: (value) =>
+                        _addDraftTagsFromInput(value, setDialogState),
                     enabled: !isUploading && !isGeneratingAI,
                   ),
                   const SizedBox(height: 12),
@@ -535,22 +635,33 @@ class PinterestScreenState extends State<PinterestScreen> {
               ),
               actions: [
                 TextButton(
-                  onPressed: isUploading || isGeneratingAI ? null : () => Navigator.pop(context),
+                  onPressed: isUploading || isGeneratingAI
+                      ? null
+                      : () => Navigator.pop(context),
                   child: const Text('Cancelar'),
                 ),
                 ElevatedButton(
-                  style: ElevatedButton.styleFrom(backgroundColor: Theme.of(context).primaryColor),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Theme.of(context).primaryColor,
+                  ),
                   onPressed: isUploading || isGeneratingAI
                       ? null
                       : () async {
                           if (titleController.text.trim().isEmpty) {
                             ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('Por favor ingresa un título')),
+                              const SnackBar(
+                                content: Text('Por favor ingresa un título'),
+                              ),
                             );
                             return;
                           }
                           setDialogState(() => isUploading = true);
-                          await _uploadPin(image, titleController.text.trim(), _draftTags, isFromCamera);
+                          await _uploadPin(
+                            image,
+                            titleController.text.trim(),
+                            _draftTags,
+                            isFromCamera,
+                          );
                           if (context.mounted) Navigator.pop(context);
                         },
                   child: isUploading
@@ -562,7 +673,10 @@ class PinterestScreenState extends State<PinterestScreen> {
                             strokeWidth: 2,
                           ),
                         )
-                      : const Text('Subir', style: TextStyle(color: Colors.white)),
+                      : const Text(
+                          'Subir',
+                          style: TextStyle(color: Colors.white),
+                        ),
                 ),
               ],
             );
@@ -578,7 +692,7 @@ class PinterestScreenState extends State<PinterestScreen> {
       showAuthModal(context);
       return;
     }
-    
+
     await showModalBottomSheet<void>(
       context: context,
       shape: const RoundedRectangleBorder(
@@ -625,8 +739,11 @@ class PinterestScreenState extends State<PinterestScreen> {
 
       if (!mounted) return;
       if (pickedFile == null) return;
-      
-      await _showUploadDialog(pickedFile, isFromCamera: source == ImageSource.camera);
+
+      await _showUploadDialog(
+        pickedFile,
+        isFromCamera: source == ImageSource.camera,
+      );
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -637,9 +754,7 @@ class PinterestScreenState extends State<PinterestScreen> {
 
   Future<void> _openCameraScreen() async {
     final imagePath = await Navigator.of(context).push<String>(
-      MaterialPageRoute(
-        builder: (context) => const CameraScreen(),
-      ),
+      MaterialPageRoute(builder: (context) => const CameraScreen()),
     );
 
     if (imagePath != null && mounted) {
@@ -653,10 +768,12 @@ class PinterestScreenState extends State<PinterestScreen> {
     final filtered = _pins.where((pin) {
       final title = (pin['title'] as String).toLowerCase();
       final tags = List<String>.from(pin['tags'] as List? ?? []);
-      final matchesSearch = lowerQuery.isEmpty ||
+      final matchesSearch =
+          lowerQuery.isEmpty ||
           title.contains(lowerQuery) ||
           tags.any((tag) => tag.toLowerCase().contains(lowerQuery));
-      final matchesTagFilter = _selectedTagFilters.isEmpty ||
+      final matchesTagFilter =
+          _selectedTagFilters.isEmpty ||
           _selectedTagFilters.any((filter) => tags.contains(filter));
       return matchesSearch && matchesTagFilter;
     }).toList();
@@ -717,129 +834,278 @@ class PinterestScreenState extends State<PinterestScreen> {
       body: Padding(
         padding: const EdgeInsets.all(8.0),
         child: _isLoading
-          ? Center(child: CircularProgressIndicator(color: Theme.of(context).primaryColor))
-          : Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                if (_selectedTagFilters.isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 8.0),
-                    child: Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: [
-                        ..._selectedTagFilters.map((tag) => FilterChip(
+            ? Center(
+                child: CircularProgressIndicator(
+                  color: Theme.of(context).primaryColor,
+                ),
+              )
+            : Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (_selectedTagFilters.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 8.0),
+                      child: Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          ..._selectedTagFilters.map(
+                            (tag) => FilterChip(
                               label: Text(tag),
                               selected: true,
                               onSelected: (_) => _toggleTagFilter(tag),
-                            )),
-                        ActionChip(
-                          label: const Text('Borrar filtros'),
-                          onPressed: _clearTagFilters,
-                        ),
-                      ],
-                    ),
-                  ),
-                Expanded(
-                  child: _filteredPins.isEmpty
-                    ? Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            const Icon(Icons.image_not_supported, size: 64, color: Colors.grey),
-                            const SizedBox(height: 16),
-                            const Text('No se encontraron publicaciones.'),
-                            TextButton(
-                              onPressed: _fetchPins,
-                              child: Text('Recargar', style: TextStyle(color: Theme.of(context).primaryColor)),
                             ),
-                          ],
-                        ),
-                      )
-                    : RefreshIndicator(
-                        onRefresh: _fetchPins,
-                        color: Theme.of(context).primaryColor,
-                        child: MasonryGridView.count(
-                            crossAxisCount: MediaQuery.of(context).size.width > 600 ? 3 : 2,
-                            mainAxisSpacing: 8.0,
-                            crossAxisSpacing: 8.0,
-                            itemCount: _filteredPins.length,
-                            itemBuilder: (context, index) {
-                              final pin = _filteredPins[index];
-                              final pinTags = List<String>.from(pin['tags'] as List? ?? []);
-
-                              return GestureDetector(
-                                onTap: () {
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (context) => PinDetailScreen(pin: pin),
+                          ),
+                          ActionChip(
+                            label: const Text('Borrar filtros'),
+                            onPressed: _clearTagFilters,
+                          ),
+                        ],
+                      ),
+                    ),
+                  Expanded(
+                    child: _filteredPins.isEmpty
+                        ? Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                const Icon(
+                                  Icons.image_not_supported,
+                                  size: 64,
+                                  color: Colors.grey,
+                                ),
+                                const SizedBox(height: 16),
+                                const Text('No se encontraron publicaciones.'),
+                                TextButton(
+                                  onPressed: _fetchPins,
+                                  child: Text(
+                                    'Recargar',
+                                    style: TextStyle(
+                                      color: Theme.of(context).primaryColor,
                                     ),
-                                  );
-                                },
-                                child: Container(
-                                  height: (pin['height'] as num?)?.toDouble() ?? 250.0,
-                                  decoration: BoxDecoration(
-                                    borderRadius: BorderRadius.circular(12.0),
-                                    color: Colors.grey.shade300,
-                                    image: DecorationImage(
-                                      image: NetworkImage(pin['image_url']),
-                                      fit: BoxFit.cover,
-                                    ),
-                                  ),
-                                  child: Stack(
-                                    children: [
-                                      Align(
-                                        alignment: Alignment.topLeft,
-                                        child: Container(
-                                          margin: const EdgeInsets.all(8.0),
-                                          padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
-                                          decoration: BoxDecoration(
-                                            color: Colors.black45,
-                                            borderRadius: BorderRadius.circular(12.0),
-                                          ),
-                                          child: Text(
-                                            pin['title'] ?? 'Sin título',
-                                            style: const TextStyle(color: Colors.white, fontSize: 12),
-                                          ),
-                                        ),
-                                      ),
-                                      if (pinTags.isNotEmpty)
-                                        Positioned(
-                                          left: 8,
-                                          right: 8,
-                                          bottom: 8,
-                                          child: Wrap(
-                                            spacing: 4,
-                                            runSpacing: 4,
-                                            children: pinTags.take(3).map((tag) {
-                                              return GestureDetector(
-                                                onTap: () => _toggleTagFilter(tag),
-                                                child: Container(
-                                                  padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
-                                                  decoration: BoxDecoration(
-                                                    color: Colors.black54,
-                                                    borderRadius: BorderRadius.circular(12.0),
-                                                  ),
-                                                  child: Text(
-                                                    tag,
-                                                    style: const TextStyle(color: Colors.white, fontSize: 10),
-                                                  ),
-                                                ),
-                                              );
-                                            }).toList(),
-                                          ),
-                                        ),
-                                    ],
                                   ),
                                 ),
-                              );
-                            },
+                              ],
+                            ),
+                          )
+                        : RefreshIndicator(
+                            onRefresh: _fetchPins,
+                            color: Theme.of(context).primaryColor,
+                            child: MasonryGridView.count(
+                              crossAxisCount:
+                                  MediaQuery.of(context).size.width > 600
+                                  ? 4
+                                  : 2,
+                              mainAxisSpacing: 8.0,
+                              crossAxisSpacing: 8.0,
+                              itemCount: _filteredPins.length,
+                              itemBuilder: (context, index) {
+                                final pin = _filteredPins[index];
+                                final pinTags = List<String>.from(
+                                  pin['tags'] as List? ?? [],
+                                );
+                                final ownerProfile =
+                                    pin['profiles'] as Map<String, dynamic>?;
+                                // final ownerAvatarUrl = ownerProfile?['avatar_url'] as String?;
+
+                                final double width =
+                                    (pin['width'] as num?)?.toDouble() ?? 0;
+                                final double height =
+                                    (pin['height'] as num?)?.toDouble() ?? 0;
+                                double aspectRatio = width / height;
+
+                                if (width > 0 && height > 0) {
+                                  aspectRatio = width / height;
+                                  aspectRatio = aspectRatio.clamp(0.6, 1.5);
+                                  print(aspectRatio);
+                                } else {
+                                  aspectRatio = 0.8;
+                                }
+
+                                return GestureDetector(
+                                  onTap: () {
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (context) =>
+                                            PinDetailScreen(pin: pin),
+                                      ),
+                                    );
+                                  },
+                                  child: ClipRRect(
+                                    borderRadius: BorderRadius.circular(12.0),
+                                    child: Container(
+                                      color: Colors.grey.shade300,
+                                      child: Stack(
+                                        children: [
+                                          // USAMOS ASPECTRATIO PARA DEFINIR EL TAMAÑO DINÁMICO
+                                          AspectRatio(
+                                            aspectRatio: aspectRatio,
+                                            child: Image.network(
+                                              pin['image_url'],
+                                              fit: BoxFit.cover,
+                                              // Previene saltos visuales mientras carga
+                                              loadingBuilder:
+                                                  (
+                                                    context,
+                                                    child,
+                                                    loadingProgress,
+                                                  ) {
+                                                    if (loadingProgress == null)
+                                                      return child;
+                                                    return Container(
+                                                      color:
+                                                          Colors.grey.shade200,
+                                                    );
+                                                  },
+                                            ),
+                                          ),
+
+                                          // OVERLAYS (Título)
+                                          Positioned(
+                                            top: 8,
+                                            left: 8,
+                                            child: Container(
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                    horizontal: 8.0,
+                                                    vertical: 4.0,
+                                                  ),
+                                              decoration: BoxDecoration(
+                                                color: Colors.black45,
+                                                borderRadius:
+                                                    BorderRadius.circular(12.0),
+                                              ),
+                                              child: Text(
+                                                pin['title'] ?? 'Sin título',
+                                                style: const TextStyle(
+                                                  color: Colors.white,
+                                                  fontSize: 10,
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+
+                                          // AVATAR DEL DUEÑO
+
+                                          // TAGS Y LIKES (Seccion Inferior)
+                                          Positioned(
+                                            bottom: 0,
+                                            left: 0,
+                                            right: 0,
+                                            child: Container(
+                                              decoration: const BoxDecoration(
+                                                gradient: LinearGradient(
+                                                  begin: Alignment.topCenter,
+                                                  end: Alignment.bottomCenter,
+                                                  colors: [
+                                                    Colors.transparent,
+                                                    Colors.black54,
+                                                  ],
+                                                ),
+                                              ),
+                                              padding: const EdgeInsets.all(
+                                                8.0,
+                                              ),
+                                              child: Row(
+                                                mainAxisAlignment:
+                                                    MainAxisAlignment
+                                                        .spaceBetween,
+                                                children: [
+                                                  // Tags (Máximo 4 para no saturar)
+                                                  if (pinTags.isNotEmpty)
+                                                    Row(
+                                                      mainAxisSize:
+                                                          MainAxisSize.min,
+                                                      children: [
+                                                        ...List.generate(
+                                                          pinTags.length > 4
+                                                              ? 4
+                                                              : pinTags.length,
+                                                          (index) => Padding(
+                                                            padding:
+                                                                EdgeInsets.only(
+                                                                  right:
+                                                                      index == 3
+                                                                      ? 0
+                                                                      : 4,
+                                                                ),
+                                                            child: Container(
+                                                              padding:
+                                                                  const EdgeInsets.symmetric(
+                                                                    horizontal:
+                                                                        6,
+                                                                    vertical: 2,
+                                                                  ),
+                                                              decoration:
+                                                                  BoxDecoration(
+                                                                    color: Colors
+                                                                        .white24,
+                                                                    borderRadius:
+                                                                        BorderRadius.circular(
+                                                                          8,
+                                                                        ),
+                                                                  ),
+                                                              child: Text(
+                                                                '#${pinTags[index]}',
+                                                                style: const TextStyle(
+                                                                  color: Colors
+                                                                      .white,
+                                                                  fontSize: 9,
+                                                                ),
+                                                              ),
+                                                            ),
+                                                          ),
+                                                        ),
+
+                                                        // Mostrar "..." si hay más de 4 tags
+                                                        if (pinTags.length > 4)
+                                                          Container(
+                                                            padding:
+                                                                const EdgeInsets.symmetric(
+                                                                  horizontal: 6,
+                                                                  vertical: 2,
+                                                                ),
+                                                            decoration:
+                                                                BoxDecoration(
+                                                                  color: Colors
+                                                                      .white24,
+                                                                  borderRadius:
+                                                                      BorderRadius.circular(
+                                                                        8,
+                                                                      ),
+                                                                ),
+                                                            child: const Text(
+                                                              '...',
+                                                              style: TextStyle(
+                                                                color: Colors
+                                                                    .white,
+                                                                fontSize: 9,
+                                                                fontWeight:
+                                                                    FontWeight
+                                                                        .bold,
+                                                              ),
+                                                            ),
+                                                          ),
+                                                      ],
+                                                    ),
+
+                                                  // Contador de Likes
+                                                ],
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
                           ),
-                      ),
-                ),
-              ],
-            ),
+                  ),
+                ],
+              ),
       ),
     );
   }
