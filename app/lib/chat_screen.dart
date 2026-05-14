@@ -613,6 +613,7 @@ class ChatScreenState extends State<ChatScreen> {
       child: hasMedia
           ? Column(
               crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
               children: [
                 _mediaAttachmentPreview(message, textColor),
                 const SizedBox(height: 8),
@@ -701,10 +702,12 @@ class ChatScreenState extends State<ChatScreen> {
           ),
           if (_pendingAttachment != null)
             Container(
-              color: Colors.grey.shade100,
-              padding: const EdgeInsets.symmetric(
-                horizontal: 12.0,
-                vertical: 10.0,
+              margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              decoration: BoxDecoration(
+                color: Colors.grey.shade100,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: Colors.grey.shade300),
               ),
               child: _pendingPreviewRow(),
             ),

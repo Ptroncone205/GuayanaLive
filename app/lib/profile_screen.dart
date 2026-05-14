@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 
 import 'auth_modal.dart';
 import 'main.dart'; 
@@ -34,6 +35,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   final int _followers = 0;
   final int _following = 0;
+  bool _isFollowing = false;
+  int _followersCount = 0;
+  int _followingCount = 0;
   int _postsCount = 0;
 
   List<Map<String, dynamic>> _posts = [];
@@ -79,7 +83,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
       final response = await _supabase
           .from('pins')
-          .select('id,title,image_url,height,created_at, user_id, profiles(username, avatar_url)') 
+          .select('id,title,image_url,width,height,created_at, user_id, profiles(username, avatar_url)') 
           .eq('user_id', _targetUserId)
           .order('created_at', ascending: false)
           .limit(9);
@@ -134,7 +138,85 @@ class _ProfileScreenState extends State<ProfileScreen> {
           _isLoading = false;
         });
       }
+
+      await _fetchFollowInfo();
     } catch (e) {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _fetchFollowInfo() async {
+    if (_supabase.auth.currentUser == null || _isMyProfile) return;
+
+    try {
+      final followRes = await _supabase.from('follows').select('id')
+          .eq('follower_id', _supabase.auth.currentUser!.id)
+          .eq('followee_id', _targetUserId)
+          .maybeSingle();
+
+      final followersRes = await _supabase.from('follows').select('id').eq('followee_id', _targetUserId);
+      final followingRes = await _supabase.from('follows').select('id').eq('follower_id', _targetUserId);
+
+      if (mounted) {
+        setState(() {
+          _isFollowing = followRes != null;
+          _followersCount = (followersRes as List).length;
+          _followingCount = (followingRes as List).length;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error cargando estado de seguimiento: $e');
+    }
+  }
+
+  Future<void> _toggleFollow() async {
+    final currentUser = _supabase.auth.currentUser;
+    if (currentUser == null) {
+      showAuthModal(context);
+      return;
+    }
+    if (_isMyProfile) return;
+
+    setState(() => _isLoading = true);
+    try {
+      if (_isFollowing) {
+        await _supabase.from('follows').delete().match({
+          'follower_id': currentUser.id,
+          'followee_id': _targetUserId,
+        });
+        if (mounted) {
+          setState(() {
+            _isFollowing = false;
+            _followersCount = (_followersCount - 1).clamp(0, 999999);
+          });
+        }
+      } else {
+        await _supabase.from('follows').insert({
+          'follower_id': currentUser.id,
+          'followee_id': _targetUserId,
+          'created_at': DateTime.now().toUtc().toIso8601String(),
+        });
+        await _supabase.from('notifications').insert({
+          'user_id': _targetUserId,
+          'actor_id': currentUser.id,
+          'type': 'follow',
+          'title': 'Nuevo seguidor',
+          'message': '${_nameController.text.isNotEmpty ? _nameController.text : 'Alguien'} te sigue.',
+          'is_read': false,
+          'created_at': DateTime.now().toUtc().toIso8601String(),
+        });
+        if (mounted) {
+          setState(() {
+            _isFollowing = true;
+            _followersCount += 1;
+          });
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error actualizando seguimiento: $e')));
+      }
+    } finally {
       if (mounted) setState(() => _isLoading = false);
     }
   }
@@ -375,6 +457,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                   _usernameController.text.isNotEmpty ? '@${_usernameController.text}' : '',
                                   style: const TextStyle(color: Colors.grey),
                                 ),
+                              if (!isGuest)
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 4.0),
+                                  child: Text(
+                                    '$_followersCount seguidores • $_followingCount siguiendo',
+                                    style: const TextStyle(color: Colors.grey, fontSize: 13),
+                                  ),
+                                ),
                               const SizedBox(height: 12),
                               
                               // BOTONES DE ACCIÓN (Editar o Mensaje)
@@ -393,16 +483,38 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                   ),
                                 )
                               else if (!isGuest)
-                                // Botón PM para perfiles de terceros
-                                ElevatedButton.icon(
-                                  onPressed: _startChatWithUser,
-                                  icon: const Icon(Icons.chat_bubble_outline, size: 18),
-                                  label: const Text('Enviar Mensaje'),
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: Colors.green.shade700,
-                                    foregroundColor: Colors.white,
-                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-                                  ),
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: ElevatedButton.icon(
+                                        onPressed: _startChatWithUser,
+                                        icon: const Icon(Icons.chat_bubble_outline, size: 18),
+                                        label: const Text('Enviar Mensaje'),
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: Colors.green.shade700,
+                                          foregroundColor: Colors.white,
+                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    OutlinedButton.icon(
+                                      onPressed: _toggleFollow,
+                                      icon: Icon(
+                                        _isFollowing ? Icons.check : Icons.person_add,
+                                        size: 18,
+                                      ),
+                                      label: Text(_isFollowing ? 'Siguiendo' : 'Seguir'),
+                                      style: OutlinedButton.styleFrom(
+                                        foregroundColor: _isFollowing ? Colors.green.shade700 : Colors.white,
+                                        backgroundColor: _isFollowing ? Colors.white : Colors.green.shade700,
+                                        side: BorderSide(
+                                          color: _isFollowing ? Colors.green.shade700 : Colors.transparent,
+                                        ),
+                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                                      ),
+                                    ),
+                                  ],
                                 ),
                             ],
                           ),
@@ -421,9 +533,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ),
 
                     if (!isGuest) ...[
-                      _buildInfoField(label: 'Nombre *', controller: _nameController),
+                      _buildInfoField(label: 'Nombre', controller: _nameController),
                       if (!_isSetupMode)
-                        _buildInfoField(label: 'Usuario (no se puede cambiar)', controller: _usernameController),
+                        _buildInfoField(label: 'Usuario', controller: _usernameController),
                       _buildInfoField(label: 'Biografía', controller: _bioController),
                       _buildInfoField(label: 'Ubicación', controller: _locationController),
                       _buildInfoField(label: 'Sitio web', controller: _websiteController),
@@ -434,36 +546,76 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         Text(_isMyProfile && !isGuest ? 'Tus publicaciones recientes' : 'Publicaciones recientes', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                         const SizedBox(height: 12),
                         if (isGuest)
-                          const Text('No hay publicaciones disponibles para invitados.', style: TextStyle(color: Colors.grey))
+                          const Text('Regístrate para publicar tus descubrimientos.', style: TextStyle(color: Colors.grey))
                         else if (_posts.isEmpty)
                            Text(_isMyProfile ? 'No has subido ninguna publicación.' : 'Sin publicaciones.', style: const TextStyle(color: Colors.grey))
                         else
-                          GridView.count(
-                            crossAxisCount: 3,
-                            mainAxisSpacing: 8,
-                            crossAxisSpacing: 8,
-                            shrinkWrap: true,
-                            physics: const NeverScrollableScrollPhysics(),
-                            children: _posts.map((post) {
-                              return GestureDetector(
-                                onTap: () {
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (context) => PinDetailScreen(
-                                        pin: post,
-                                        fromProfile: true, // Indica que viene del perfil
-                                      ),
+                          MasonryGridView.count(
+                          crossAxisCount:
+                              MediaQuery.of(context).size.width > 700 ? 4 : 3,
+                          mainAxisSpacing: 8,
+                          crossAxisSpacing: 8,
+                          shrinkWrap: true,
+                          physics: const NeverScrollableScrollPhysics(),
+                          itemCount: _posts.length,
+                          itemBuilder: (context, index) {
+                            final post = _posts[index];
+
+                            final double width =
+                                (post['width'] as num?)?.toDouble() ?? 0;
+
+                            final double height =
+                                (post['height'] as num?)?.toDouble() ?? 0;
+
+                            double aspectRatio = 0.8;
+
+                            if (width > 0 && height > 0) {
+                              aspectRatio = width / height;
+                              aspectRatio = aspectRatio.clamp(0.6, 1.5);
+                            }
+
+                            return GestureDetector(
+                              onTap: () async {
+                                await Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) => PinDetailScreen(
+                                      pin: post,
+                                      fromProfile: true,
                                     ),
-                                  );
-                                },
-                                child: ClipRRect(
-                                  borderRadius: BorderRadius.circular(12),
-                                  child: Image.network(post['image_url'], fit: BoxFit.cover),
+                                  ),
+                                );
+
+                                // Reload after returning from details
+                                if (mounted) {
+                                  await _fetchProfileData();
+                                }
+                              },
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(12),
+                                child: Container(
+                                  color: Colors.grey.shade300,
+                                  child: AspectRatio(
+                                    aspectRatio: aspectRatio,
+                                    child: Image.network(
+                                      post['image_url'],
+                                      fit: BoxFit.cover,
+                                      loadingBuilder:
+                                          (context, child, loadingProgress) {
+                                            if (loadingProgress == null)
+                                              return child;
+
+                                            return Container(
+                                              color: Colors.grey.shade200,
+                                            );
+                                          },
+                                    ),
+                                  ),
                                 ),
-                              );
-                            }).toList(),
-                          ),
+                              ),
+                            );
+                          },
+                        ),
                     ]
                   ],
                 ),

@@ -271,6 +271,60 @@ class _PinDetailScreenState extends State<PinDetailScreen> {
     }
   }
 
+  Future<void> _deletePin() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Eliminar publicación'),
+        content: const Text(
+          '¿Estás seguro de que deseas eliminar esta publicación?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancelar'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Eliminar', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    try {
+      final pinId = widget.pin['id'];
+
+      // eliminar comentarios
+      await _supabase.from('comments').delete().eq('pin_id', pinId);
+
+      // eliminar likes
+      await _supabase.from('pin_likes').delete().eq('pin_id', pinId);
+
+      // eliminar relaciones tags
+      await _supabase.from('pin_tags').delete().eq('pin_id', pinId);
+
+      // eliminar pin
+      await _supabase.from('pins').delete().eq('id', pinId);
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Publicación eliminada exitosamente')),
+      );
+
+      Navigator.pop(context, true);
+    } catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error eliminando publicación: $e')),
+      );
+    }
+  }
+
   Future<void> _toggleLike() async {
     if (isGuest) {
       showAuthModal(context);
@@ -403,25 +457,42 @@ Widget _buildDetailsAndComments({required bool isDesktop}) {
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Row(
-            children: [
-              Row(
-                children: [
-                  IconButton(
-                    icon: Icon(_isLiked ? Icons.favorite : Icons.favorite_border, 
-                      color: _isLiked ? Colors.red : Colors.black),
-                    onPressed: _toggleLike,
-                  ),
-                  Text(
-                    '$_likeCount',
-                    style: TextStyle(
-                      color: _isLiked ? Colors.red : Colors.black,
-                      fontWeight: FontWeight.bold,
+              children: [
+                Row(
+                  children: [
+                    IconButton(
+                      icon: Icon(
+                        _isLiked ? Icons.favorite : Icons.favorite_border,
+                        color: _isLiked ? Colors.red : Colors.black,
+                      ),
+                      onPressed: _toggleLike,
                     ),
-                  ),
-                ],
-              ),
-              IconButton(icon: const Icon(Icons.share), onPressed: () {}),
-              IconButton(icon: const Icon(Icons.more_horiz), onPressed: () {}),
+                    Text(
+                      '$_likeCount',
+                      style: TextStyle(
+                        color: _isLiked ? Colors.red : Colors.black,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+
+                    IconButton(icon: const Icon(Icons.share), onPressed: () {}),
+
+                    // DELETE BUTTON
+                    if (_supabase.auth.currentUser?.id == widget.pin['user_id'])
+                      IconButton(
+                        icon: const Icon(
+                          Icons.delete_outline,
+                          color: Colors.red,
+                        ),
+                        onPressed: _deletePin,
+                      ),
+
+                    IconButton(
+                      icon: const Icon(Icons.more_horiz),
+                      onPressed: () {},
+                    ),
+                  ],
+                ),
             ],
           ),
           ElevatedButton(
@@ -548,24 +619,52 @@ Widget _buildDetailsAndComments({required bool isDesktop}) {
                   final currentUserId = _supabase.auth.currentUser?.id;
                   final isMyComment = currentUserId != null && comment['user_id'] == currentUserId;
 
-                  return ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    leading: CircleAvatar(radius: 14, backgroundImage: commenterProfile?['avatar_url'] != null ? NetworkImage(commenterProfile?['avatar_url']) : null),
-                    title: Text(commenterName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                    subtitle: Text(comment['text'] ?? ''),
-                    trailing: isMyComment
-                      ? IconButton(
-                          icon: const Icon(
-                            Icons.delete_outline,
-                            size: 18,
-                            color: Colors.grey,
-                          ),
-                          onPressed: () => _deleteComment(comment['id']),
-                          constraints: const BoxConstraints(),
-                          padding: EdgeInsets.zero,
-                        )
-                      : null,
-                  );
+                  return InkWell(
+  borderRadius: BorderRadius.circular(12),
+  onTap: () {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ProfileScreen(
+          userId: comment['user_id'],
+        ),
+      ),
+    );
+  },
+  child: ListTile(
+    contentPadding: EdgeInsets.zero,
+
+    leading: CircleAvatar(
+      radius: 14,
+      backgroundImage: commenterProfile?['avatar_url'] != null
+          ? NetworkImage(commenterProfile?['avatar_url'])
+          : null,
+    ),
+
+    title: Text(
+      commenterName,
+      style: const TextStyle(
+        fontWeight: FontWeight.bold,
+        fontSize: 13,
+      ),
+    ),
+
+    subtitle: Text(comment['text'] ?? ''),
+
+    trailing: isMyComment
+        ? IconButton(
+            icon: const Icon(
+              Icons.delete_outline,
+              size: 18,
+              color: Colors.grey,
+            ),
+            onPressed: () => _deleteComment(comment['id']),
+            constraints: const BoxConstraints(),
+            padding: EdgeInsets.zero,
+          )
+        : null,
+  ),
+);
                 },
               ),
             );
