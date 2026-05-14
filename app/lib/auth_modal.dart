@@ -281,7 +281,7 @@ class _AuthModalState extends State<AuthModal> {
             
           const SizedBox(height: 16),
           Text(
-            _isLogin ? Translations.text(context, 'login_title') : Translations.text(context, 'create_account_title'),
+            _isLogin ? Translations.text(context, 'login') : Translations.text(context, 'create_account'),
             style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
             textAlign: TextAlign.center,
           ),
@@ -300,7 +300,7 @@ class _AuthModalState extends State<AuthModal> {
             onPressed: _isLoading ? null : (_isLogin ? _login : _register),
             child: _isLoading 
               ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-              : Text(_isLogin ? Translations.text(context, 'login_button') : Translations.text(context, 'register_button'), style: const TextStyle(fontSize: 16, color: Colors.white)),
+              : Text(_isLogin ? Translations.text(context, 'login') : Translations.text(context, 'register'), style: const TextStyle(fontSize: 16, color: Colors.white)),
           ),
           const SizedBox(height: 16),
           

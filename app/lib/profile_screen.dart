@@ -172,72 +172,111 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _toggleFollow() async {
-    final currentUser = _supabase.auth.currentUser;
-    if (currentUser == null) {
-      showAuthModal(context);
-      return;
-    }
-    if (_isMyProfile) return;
+  final currentUser = _supabase.auth.currentUser;
 
-    setState(() => _isLoading = true);
-    try {
-      if (_isFollowing) {
-        await _supabase.from('follows').delete().match({
-          'follower_id': currentUser.id,
-          'followee_id': _targetUserId,
-        });
-        if (mounted) {
-          setState(() {
-            _isFollowing = false;
-            _followersCount = (_followersCount - 1).clamp(0, 999999);
+  if (currentUser == null) {
+    showAuthModal(context);
+    return;
+  }
+
+  if (_isMyProfile) return;
+
+  // Prevent spam taps
+  if (_isLoading) return;
+
+  setState(() => _isLoading = true);
+
+  try {
+    if (_isFollowing) {
+      // UNFOLLOW
+      await _supabase
+          .from('follows')
+          .delete()
+          .match({
+            'follower_id': currentUser.id,
+            'followee_id': _targetUserId,
           });
-        }
-      } else {
+
+      if (mounted) {
+        setState(() {
+          _isFollowing = false;
+          _followersCount =
+              (_followersCount - 1).clamp(0, 999999);
+        });
+      }
+    } else {
+      // CHECK FIRST (prevents duplicate insert)
+      final existing = await _supabase
+          .from('follows')
+          .select('id')
+          .eq('follower_id', currentUser.id)
+          .eq('followee_id', _targetUserId)
+          .maybeSingle();
+
+      if (existing == null) {
         await _supabase.from('follows').insert({
           'follower_id': currentUser.id,
           'followee_id': _targetUserId,
-          'created_at': DateTime.now().toUtc().toIso8601String(),
+          'created_at': DateTime.now()
+              .toUtc()
+              .toIso8601String(),
         });
 
+        // FOLLOW NOTIFICATION
         final myProfileRes = await _supabase
             .from('profiles')
             .select('full_name, username')
             .eq('id', currentUser.id)
             .maybeSingle();
+
         final myName = myProfileRes != null
-            ? (myProfileRes['full_name'] as String?) ?? (myProfileRes['username'] as String?) ?? Translations.text(context, 'user')
-            : Translations.text(context, 'user');
+            ? (myProfileRes['full_name'] as String?) ??
+                (myProfileRes['username'] as String?) ??
+                'Usuario'
+            : 'Usuario';
 
         await _supabase.from('notifications').insert({
           'user_id': _targetUserId,
           'actor_id': currentUser.id,
           'type': 'follow',
-          'title': Translations.text(context, 'new_follower_title'),
-          'message': Translations.text(
-            context,
-            'new_follower_message',
-            {'follower': myName},
-          ),
+          'title': 'Nuevo seguidor',
+          'message': '$myName comenzó a seguirte.',
           'reference_id': currentUser.id,
           'is_read': false,
-          'created_at': DateTime.now().toUtc().toIso8601String(),
+          'created_at': DateTime.now()
+              .toUtc()
+              .toIso8601String(),
         });
-        if (mounted) {
-          setState(() {
-            _isFollowing = true;
-            _followersCount += 1;
-          });
-        }
       }
-    } catch (e) {
+
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(Translations.text(context, 'error_updating_follow', {'error': e.toString()}))));
+        setState(() {
+          _isFollowing = true;
+          _followersCount += 1;
+        });
       }
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
+    }
+
+    // FINAL SYNC WITH DATABASE
+    await _fetchFollowInfo();
+  } catch (e) {
+    debugPrint('Follow error: $e');
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Error updating follow: $e',
+          ),
+        ),
+      );
+    }
+  } finally {
+    if (mounted) {
+      setState(() => _isLoading = false);
     }
   }
-
+}
   // Lógica para iniciar o abrir un chat existente
   Future<void> _startChatWithUser() async {
     final currentUser = _supabase.auth.currentUser;

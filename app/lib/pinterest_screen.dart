@@ -916,7 +916,7 @@ class PinterestScreenState extends State<PinterestScreen> {
                 if (_hasUnreadNotifications)
                   Positioned(
                     right: 0,
-                    top: 8,
+                    top: 0,
                     child: Container(
                       width: 8,
                       height: 8,
