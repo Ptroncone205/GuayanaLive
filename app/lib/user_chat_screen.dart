@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'translations.dart';
 
 class ChatPartner {
   final String id;
@@ -175,7 +176,7 @@ class _UserChatScreenState extends State<UserChatScreen> {
       final insertRes = await _supabase.from('chat_threads').insert({
         'user1_id': currentUserId,
         'user2_id': partner.id,
-        'last_message': 'Chat iniciado',
+        'last_message': Translations.text(context, 'chat_started'),
       }).select('id').single();
       threadId = insertRes['id'];
     }
@@ -195,7 +196,7 @@ class _UserChatScreenState extends State<UserChatScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Chat entre usuarios'),
+        title: Text(Translations.text(context, 'chat_between_users')),
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
@@ -211,13 +212,13 @@ class _UserChatScreenState extends State<UserChatScreen> {
                     padding: const EdgeInsets.all(16.0),
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
-                      children: const [
-                        Icon(Icons.lock, size: 48, color: Colors.grey),
-                        SizedBox(height: 16),
+                      children: [
+                        const Icon(Icons.lock, size: 48, color: Colors.grey),
+                        const SizedBox(height: 16),
                         Text(
-                          'Debes iniciar sesión para usar el chat entre usuarios.',
+                          Translations.text(context, 'login_required_chat'),
                           textAlign: TextAlign.center,
-                          style: TextStyle(fontSize: 16, color: Colors.black54),
+                          style: const TextStyle(fontSize: 16, color: Colors.black54),
                         ),
                       ],
                     ),
@@ -240,7 +241,7 @@ class _UserChatScreenState extends State<UserChatScreen> {
                                   borderRadius: BorderRadius.circular(16),
                                 ),
                                 child: Text(
-                                  'Conversaciones',
+                                  Translations.text(context, 'conversations'),
                                   textAlign: TextAlign.center,
                                   style: TextStyle(
                                     color: _selectedTab == 0 ? Colors.white : Colors.black87,
@@ -261,7 +262,7 @@ class _UserChatScreenState extends State<UserChatScreen> {
                                   borderRadius: BorderRadius.circular(16),
                                 ),
                                 child: Text(
-                                  'Contactos',
+                                  Translations.text(context, 'contacts'),
                                   textAlign: TextAlign.center,
                                   style: TextStyle(
                                     color: _selectedTab == 1 ? Colors.white : Colors.black87,
@@ -284,18 +285,18 @@ class _UserChatScreenState extends State<UserChatScreen> {
 
   Widget _buildThreadsList() {
     if (_threads.isEmpty) {
-      return const Center(
+      return Center(
         child: Padding(
-          padding: EdgeInsets.all(24.0),
+          padding: const EdgeInsets.all(24.0),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.chat_bubble_outline, size: 48, color: Colors.grey),
-              SizedBox(height: 16),
+              const Icon(Icons.chat_bubble_outline, size: 48, color: Colors.grey),
+              const SizedBox(height: 16),
               Text(
-                'Aún no tienes conversaciones.\nSelecciona un contacto para iniciar un chat.',
+                '${Translations.text(context, 'no_conversations_yet')}\n${Translations.text(context, 'select_contact_to_start_chat')}',
                 textAlign: TextAlign.center,
-                style: TextStyle(color: Colors.black54),
+                style: const TextStyle(color: Colors.black54),
               ),
             ],
           ),
@@ -329,7 +330,7 @@ class _UserChatScreenState extends State<UserChatScreen> {
 
   Widget _buildContactsList() {
     if (_contacts.isEmpty) {
-      return const Center(child: Text('No tienes contactos (mutuals) aún.', style: TextStyle(color: Colors.black54)));
+      return Center(child: Text(Translations.text(context, 'no_contacts_yet'), style: const TextStyle(color: Colors.black54)));
     }
 
     return ListView.separated(
@@ -345,7 +346,7 @@ class _UserChatScreenState extends State<UserChatScreen> {
             child: partner.avatarUrl == null ? Text(partner.name.substring(0, 1).toUpperCase()) : null,
           ),
           title: Text(partner.name),
-          subtitle: Text('Inicia una conversación con ${partner.name}'),
+          subtitle: Text(Translations.text(context, 'start_chat_with', {'name': partner.name})),
           onTap: () => _openThread(partner),
         );
       },
@@ -449,7 +450,7 @@ class _UserChatThreadScreenState extends State<UserChatThreadScreen> {
                   return Center(
                     child: Padding(
                       padding: const EdgeInsets.all(24.0),
-                      child: Text('No hay mensajes aún. Envía el primero a ${widget.partner.name}.', style: const TextStyle(color: Colors.black54)),
+                      child: Text(Translations.text(context, 'no_messages_yet', {'name': widget.partner.name}), style: const TextStyle(color: Colors.black54)),
                     ),
                   );
                 }
@@ -508,8 +509,8 @@ class _UserChatThreadScreenState extends State<UserChatThreadScreen> {
                     controller: _messageController,
                     textInputAction: TextInputAction.send,
                     onSubmitted: (_) => _sendMessage(),
-                    decoration: const InputDecoration(
-                      hintText: 'Escribe un mensaje...',
+                    decoration: InputDecoration(
+                      hintText: Translations.text(context, 'type_a_message'),
                       border: InputBorder.none,
                     ),
                   ),

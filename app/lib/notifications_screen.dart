@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'translations.dart';
 
 enum NotificationType { message, follow, like, post }
 
@@ -168,14 +169,14 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Notificaciones'),
+        title: Text(Translations.text(context, 'notifications')),
         actions: [
           if (!_isLoading && unreadCount > 0)
             TextButton(
               onPressed: _markAllRead,
-              child: const Text(
-                'Marcar leídas',
-                style: TextStyle(color: Colors.white),
+              child: Text(
+                Translations.text(context, 'mark_as_read'),
+                style: const TextStyle(color: Colors.white),
               ),
             ),
         ],
@@ -183,8 +184,15 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : _notifications.isEmpty
-              ? const Center(
-                  child: Text('No tienes notificaciones nuevas.'),
+              ? Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.notifications_none, size: 64, color: Colors.grey[400]),
+                      const SizedBox(height: 16),
+                      Text(Translations.text(context, 'no_new_notifications'), style: TextStyle(color: Colors.grey[600], fontSize: 16)),
+                    ],
+                  ),
                 )
               : ListView.separated(
                   itemCount: _notifications.length,

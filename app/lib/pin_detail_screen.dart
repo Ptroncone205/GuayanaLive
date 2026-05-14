@@ -8,6 +8,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'profile_screen.dart';
 import 'auth_modal.dart';
 import 'utils/platform_file_saver.dart';
+import 'translations.dart';
 
 class PinDetailScreen extends StatefulWidget {
   final Map<String, dynamic> pin;
@@ -79,7 +80,7 @@ class _PinDetailScreenState extends State<PinDetailScreen> {
     if (imageUrl == null || imageUrl.isEmpty) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('No se encontró la imagen para guardar.')),
+          SnackBar(content: Text(Translations.text(context, 'image_not_found'))),
         );
       }
       return;
@@ -98,21 +99,21 @@ class _PinDetailScreenState extends State<PinDetailScreen> {
       if (mounted) {
         if (savedPath != null) {
           final message = savedPath == 'download'
-              ? 'Descarga iniciada en el navegador.'
-              : 'Imagen guardada en: $savedPath';
+              ? Translations.text(context, 'download_started')
+              : Translations.text(context, 'image_saved', {'path': savedPath});
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text(message)),
           );
         } else {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('No se pudo guardar la imagen en el dispositivo.')),
+            SnackBar(content: Text(Translations.text(context, 'could_not_save_image'))),
           );
         }
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error al guardar imagen: $e')),
+          SnackBar(content: Text('${Translations.text(context, 'error_saving_image')}: $e')),
         );
       }
     }
@@ -237,16 +238,16 @@ class _PinDetailScreenState extends State<PinDetailScreen> {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Eliminar comentario'),
-        content: const Text('¿Estás seguro de que deseas eliminar este comentario?'),
+        title: Text(Translations.text(context, 'delete_comment')),
+        content: Text(Translations.text(context, 'delete_comment_confirm')),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false), 
-            child: const Text('Cancelar')
+            child: Text(Translations.text(context, 'cancel'))
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true), 
-            child: const Text('Eliminar', style: TextStyle(color: Colors.red))
+            child: Text(Translations.text(context, 'delete'), style: const TextStyle(color: Colors.red))
           ),
         ],
       ),
@@ -259,13 +260,13 @@ class _PinDetailScreenState extends State<PinDetailScreen> {
       await _fetchComments();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Comentario eliminado exitosamente')),
+          SnackBar(content: Text(Translations.text(context, 'comment_deleted'))),
         );
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error al eliminar comentario: $e')),
+          SnackBar(content: Text('${Translations.text(context, 'error_deleting_comment')}: $e')),
         );
       }
     }
@@ -275,18 +276,16 @@ class _PinDetailScreenState extends State<PinDetailScreen> {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Eliminar publicación'),
-        content: const Text(
-          '¿Estás seguro de que deseas eliminar esta publicación?',
-        ),
+        title: Text(Translations.text(context, 'delete_post')),
+        content: Text(Translations.text(context, 'delete_post_confirm')),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancelar'),
+            child: Text(Translations.text(context, 'cancel')),
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Eliminar', style: TextStyle(color: Colors.red)),
+            child: Text(Translations.text(context, 'delete'), style: const TextStyle(color: Colors.red)),
           ),
         ],
       ),
@@ -312,7 +311,7 @@ class _PinDetailScreenState extends State<PinDetailScreen> {
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Publicación eliminada exitosamente')),
+        SnackBar(content: Text(Translations.text(context, 'post_deleted'))),
       );
 
       Navigator.pop(context, true);
@@ -320,7 +319,7 @@ class _PinDetailScreenState extends State<PinDetailScreen> {
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error eliminando publicación: $e')),
+        SnackBar(content: Text('${Translations.text(context, 'error_deleting_post')}: $e')),
       );
     }
   }
@@ -354,7 +353,7 @@ class _PinDetailScreenState extends State<PinDetailScreen> {
           _likeCount += _isLiked ? -1 : 1;
         });
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error actualizando like: $e')),
+          SnackBar(content: Text('${Translations.text(context, 'error_updating_like')}: $e')),
         );
       }
     }
@@ -501,14 +500,14 @@ Widget _buildDetailsAndComments({required bool isDesktop}) {
               backgroundColor: primaryColor,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
             ),
-            child: const Text('Guardar', style: TextStyle(color: Colors.white)),
+            child: Text(Translations.text(context, 'save'), style: const TextStyle(color: Colors.white)),
           ),
         ],
       ),
       const SizedBox(height: 16),
       // Título
       Text(
-        widget.pin['title'] ?? 'Sin título',
+        widget.pin['title'] ?? Translations.text(context, 'untitled'),
         style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
       ),
       // Perfil del Dueño
@@ -590,7 +589,7 @@ Widget _buildDetailsAndComments({required bool isDesktop}) {
         ),
       ],
       const Divider(height: 32),
-      const Text('Comentarios', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+      Text(Translations.text(context, 'comments'), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
       const SizedBox(height: 16),
     ],
   );
@@ -599,9 +598,9 @@ Widget _buildDetailsAndComments({required bool isDesktop}) {
   Widget commentsList = _isLoadingComments
       ? const Center(child: CircularProgressIndicator())
       : _comments.isEmpty
-          ? const Padding(
-              padding: EdgeInsets.symmetric(vertical: 20),
-              child: Text('Aún no hay comentarios.', style: TextStyle(color: Colors.grey)),
+          ? Padding(
+              padding: const EdgeInsets.symmetric(vertical: 20),
+              child: Text(Translations.text(context, 'no_comments_yet'), style: const TextStyle(color: Colors.grey)),
             )
           : Scrollbar(
               controller: _commentScrollController,
@@ -702,7 +701,7 @@ Widget _buildCommentInput(Color primaryColor) {
           child: TextField(
             controller: _commentController,
             decoration: InputDecoration(
-              hintText: 'Añadir un comentario...',
+              hintText: Translations.text(context, 'add_a_comment'),
               filled: true,
               fillColor: Colors.grey.shade200,
               border: OutlineInputBorder(borderRadius: BorderRadius.circular(24), borderSide: BorderSide.none),
@@ -766,15 +765,15 @@ Widget build(BuildContext context) {
           ),
 
             const SizedBox(height: 24),
-            const Text('Más como esto', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+            Text(Translations.text(context, 'more_like_this'), style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
             const SizedBox(height: 16),
             
             if (_isLoadingRelated)
               Center(child: CircularProgressIndicator(color: Theme.of(context).primaryColor))
             else if (_relatedPins.isEmpty)
-              const Padding(
-                padding: EdgeInsets.all(16.0),
-                child: Text('No hay publicaciones relacionadas.', style: TextStyle(color: Colors.grey)),
+              Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Text(Translations.text(context, 'no_related_posts'), style: const TextStyle(color: Colors.grey)),
               )
             else
               Container(

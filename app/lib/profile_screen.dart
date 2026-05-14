@@ -6,7 +6,9 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 
 import 'auth_modal.dart';
+import 'locale_provider.dart';
 import 'main.dart'; 
+import 'translations.dart';
 import 'user_chat_screen.dart'; // Importación necesaria para la navegación al chat
 import 'pin_detail_screen.dart'; // Importación para navegar a detalles de pin
 
@@ -200,8 +202,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
           'user_id': _targetUserId,
           'actor_id': currentUser.id,
           'type': 'follow',
-          'title': 'Nuevo seguidor',
-          'message': '${_nameController.text.isNotEmpty ? _nameController.text : 'Alguien'} te sigue.',
+          'title': Translations.text(context, 'new_follower_title'),
+          'message': Translations.text(
+            context,
+            'new_follower_message',
+            {'follower': _nameController.text.isNotEmpty ? _nameController.text : Translations.text(context, 'user')},
+          ),
           'is_read': false,
           'created_at': DateTime.now().toUtc().toIso8601String(),
         });
@@ -214,7 +220,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error actualizando seguimiento: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(Translations.text(context, 'error_updating_follow', {'error': e.toString()}))));
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -243,14 +249,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
         final insertRes = await _supabase.from('chat_threads').insert({
           'user1_id': currentUser.id,
           'user2_id': _targetUserId,
-          'last_message': 'Chat iniciado',
+          'last_message': Translations.text(context, 'chat_started'),
         }).select('id').single();
         threadId = insertRes['id'];
       }
 
       final partner = ChatPartner(
         id: _targetUserId,
-        name: _nameController.text.isNotEmpty ? _nameController.text : 'Usuario',
+        name: _nameController.text.isNotEmpty ? _nameController.text : Translations.text(context, 'user'),
         avatarUrl: _avatarUrl,
       );
 
@@ -265,7 +271,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error al iniciar chat: $e')),
+          SnackBar(content: Text('${Translations.text(context, 'error_starting_chat')}: $e')),
         );
       }
     } finally {
@@ -301,7 +307,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
       setState(() => _avatarUrl = newAvatarUrl);
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error al actualizar foto: $e')));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(Translations.text(context, 'error_updating_photo', {'error': e.toString()}))));
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -309,7 +315,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Future<void> _saveProfile() async {
     if (_nameController.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('El nombre es requerido')));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(Translations.text(context, 'name_required'))));
       return;
     }
 
@@ -328,16 +334,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
       if (_isSetupMode && widget.onSetupComplete != null) {
         widget.onSetupComplete!();
       } else if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Perfil guardado')));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(Translations.text(context, 'profile_saved'))));
       }
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error al guardar: $e')));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(Translations.text(context, 'error_saving_profile', {'error': e.toString()}))));
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
   }
 
-  Widget _buildInfoField({required String label, required TextEditingController controller}) {
+  Widget _buildInfoField({required String label, required TextEditingController controller, bool isBiography = false}) {
     final bool isEditable = _isEditing || _isSetupMode;
 
     if ((!isEditable && controller.text.isEmpty) || isGuest) return const SizedBox.shrink();
@@ -356,7 +362,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(12.0), borderSide: BorderSide.none),
             contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
           ),
-          maxLines: label == 'Biografía' ? 3 : 1,
+          maxLines: isBiography ? 3 : 1,
         ),
         const SizedBox(height: 12),
       ],
@@ -369,7 +375,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     final content = Scaffold(
       appBar: AppBar(
-        title: Text(_isSetupMode ? 'Completa tu perfil' : (_isMyProfile ? 'Mi perfil' : 'Perfil')),
+        title: Text(_isSetupMode ? Translations.text(context, 'complete_profile') : (_isMyProfile ? Translations.text(context, 'my_profile') : Translations.text(context, 'profile'))),
         actions: [
           if (_isMyProfile)
             IconButton(
@@ -383,7 +389,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   _supabase.auth.signOut();
                 }
               },
-              tooltip: isGuest ? 'Salir' : 'Cerrar sesión',
+              tooltip: isGuest ? Translations.text(context, 'logout_guest') : Translations.text(context, 'logout'),
             )
         ],
       ),
@@ -396,17 +402,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     if (_isSetupMode) ...[
-                      const Center(
+                      Center(
                         child: Text(
-                          '¡Bienvenido!',
-                          style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+                          Translations.text(context, 'welcome'),
+                          style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
                         ),
                       ),
                       const SizedBox(height: 8),
-                      const Center(
+                      Center(
                         child: Text(
-                          'Por favor completa tu nombre para continuar.',
-                          style: TextStyle(color: Colors.grey),
+                          Translations.text(context, 'complete_profile'),
+                          style: const TextStyle(color: Colors.grey),
                         ),
                       ),
                       const SizedBox(height: 24),
@@ -448,7 +454,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                isGuest ? 'Invitado' : (_nameController.text.isNotEmpty ? _nameController.text : 'Usuario'),
+                                isGuest ? Translations.text(context, 'guest') : (_nameController.text.isNotEmpty ? _nameController.text : Translations.text(context, 'user')),
                                 style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
                               ),
                               const SizedBox(height: 4),
@@ -461,7 +467,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                 Padding(
                                   padding: const EdgeInsets.only(top: 4.0),
                                   child: Text(
-                                    '$_followersCount seguidores • $_followingCount siguiendo',
+                                    Translations.text(context, 'followers_following_count', {
+                                      'followers': _followersCount.toString(),
+                                      'following': _followingCount.toString(),
+                                    }),
                                     style: const TextStyle(color: Colors.grey, fontSize: 13),
                                   ),
                                 ),
@@ -483,13 +492,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
                                         ),
                                         child: Text(
-                                          isGuest ? 'Iniciar sesión / Registrarse' : (_isEditing || _isSetupMode ? 'Guardar perfil' : 'Editar perfil'), 
+                                          isGuest ? Translations.text(context, 'login_signup') : (_isEditing || _isSetupMode ? Translations.text(context, 'save_profile') : Translations.text(context, 'edit_profile')),
                                           style: const TextStyle(color: Colors.white),
                                         ),
                                       ),
                                     ),
                                     const SizedBox(width: 8),
-                                    if (!isGuest && !_isEditing && !_isSetupMode)
+                                    if (!_isEditing && !_isSetupMode)
                                       SizedBox(
                                         height: 44,
                                         width: 44,
@@ -520,7 +529,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                       child: ElevatedButton.icon(
                                         onPressed: _startChatWithUser,
                                         icon: const Icon(Icons.chat_bubble_outline, size: 18),
-                                        label: const Text('Enviar Mensaje'),
+                                        label: Text(Translations.text(context, 'send_message')),
                                         style: ElevatedButton.styleFrom(
                                           minimumSize: const Size(0, 44),
                                           padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -537,7 +546,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                         _isFollowing ? Icons.check : Icons.person_add,
                                         size: 18,
                                       ),
-                                      label: Text(_isFollowing ? 'Siguiendo' : 'Seguir'),
+                                      label: Text(_isFollowing ? Translations.text(context, 'following') : Translations.text(context, 'follow')),
                                       style: OutlinedButton.styleFrom(
                                         minimumSize: const Size(0, 44),
                                         padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -559,31 +568,39 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     const SizedBox(height: 24),
                     
                     if (isGuest)
-                      const Padding(
-                        padding: EdgeInsets.only(top: 8.0, bottom: 24.0),
+                      Padding(
+                        padding: const EdgeInsets.only(top: 8.0, bottom: 24.0),
                         child: Text(
-                          'Regístrate para interactuar con la comunidad, guardar tus especies favoritas y compartir tus propios descubrimientos.', 
-                          style: TextStyle(color: Colors.grey, fontSize: 16)
+                          Translations.text(context, 'register_to_interact'),
+                          style: const TextStyle(color: Colors.grey, fontSize: 16),
                         ),
                       ),
 
                     if (!isGuest) ...[
-                      _buildInfoField(label: 'Nombre', controller: _nameController),
+                      _buildInfoField(label: Translations.text(context, 'name'), controller: _nameController),
                       if (!_isSetupMode)
-                        _buildInfoField(label: 'Usuario', controller: _usernameController),
-                      _buildInfoField(label: 'Biografía', controller: _bioController),
-                      _buildInfoField(label: 'Ubicación', controller: _locationController),
-                      _buildInfoField(label: 'Sitio web', controller: _websiteController),
+                        _buildInfoField(label: Translations.text(context, 'username'), controller: _usernameController),
+                      _buildInfoField(label: Translations.text(context, 'biography'), controller: _bioController, isBiography: true),
+                      _buildInfoField(label: Translations.text(context, 'location'), controller: _locationController),
+                      _buildInfoField(label: Translations.text(context, 'website'), controller: _websiteController),
                     ],
                     
                     const SizedBox(height: 12),
                     if (!_isSetupMode) ...[
-                        Text(_isMyProfile && !isGuest ? 'Tus publicaciones recientes' : 'Publicaciones recientes', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                        Text(
+                          _isMyProfile && !isGuest
+                              ? Translations.text(context, 'your_recent_posts')
+                              : Translations.text(context, 'recent_posts'),
+                          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                        ),
                         const SizedBox(height: 12),
                         if (isGuest)
-                          const Text('Regístrate para publicar tus descubrimientos.', style: TextStyle(color: Colors.grey))
+                          Text(Translations.text(context, 'register_to_post'), style: const TextStyle(color: Colors.grey))
                         else if (_posts.isEmpty)
-                           Text(_isMyProfile ? 'No has subido ninguna publicación.' : 'Sin publicaciones.', style: const TextStyle(color: Colors.grey))
+                           Text(
+                             _isMyProfile ? Translations.text(context, 'no_posts_yet') : Translations.text(context, 'no_publications'),
+                             style: const TextStyle(color: Colors.grey),
+                           )
                         else
                           MasonryGridView.count(
                           crossAxisCount:
@@ -671,50 +688,98 @@ class _ProfileScreenState extends State<ProfileScreen> {
 class ProfileSettingsScreen extends StatelessWidget {
   const ProfileSettingsScreen({super.key});
 
+  Future<void> _showLanguageDialog(BuildContext context) async {
+    final localeProvider = LocaleProviderScope.of(context);
+    final selectedLocale = localeProvider.locale;
+
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: Text(Translations.text(context, 'select_language')),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              RadioListTile<Locale>(
+                title: Text(Translations.text(context, 'spanish')),
+                value: const Locale('es'),
+                groupValue: selectedLocale,
+                onChanged: (locale) {
+                  if (locale != null) {
+                    localeProvider.setLocale(locale);
+                    Navigator.of(dialogContext).pop();
+                  }
+                },
+              ),
+              RadioListTile<Locale>(
+                title: Text(Translations.text(context, 'english')),
+                value: const Locale('en'),
+                groupValue: selectedLocale,
+                onChanged: (locale) {
+                  if (locale != null) {
+                    localeProvider.setLocale(locale);
+                    Navigator.of(dialogContext).pop();
+                  }
+                },
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: Text(Translations.text(context, 'cancel')),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Ajustes'),
+        title: Text(Translations.text(context, 'settings')),
         backgroundColor: Theme.of(context).primaryColor,
       ),
       body: ListView(
         padding: const EdgeInsets.symmetric(vertical: 12),
-        children: const [
+        children: [
           _SettingsTile(
             icon: Icons.brightness_6,
-            title: 'Modo oscuro',
-            subtitle: 'Cambiar el color de los menús a modo oscuro',
+            title: Translations.text(context, 'dark_mode'),
+            subtitle: Translations.text(context, 'dark_mode_subtitle'),
           ),
           _SettingsTile(
             icon: Icons.language,
-            title: 'Idioma',
-            subtitle: 'Colocar la aplicación en otro idioma',
+            title: Translations.text(context, 'language'),
+            subtitle: '${Translations.text(context, 'language_subtitle')} • ${Translations.currentLanguageLabel(context)}',
+            onTap: () => _showLanguageDialog(context),
           ),
           _SettingsTile(
             icon: Icons.block,
-            title: 'Usuarios bloqueados',
-            subtitle: 'Ver usuarios bloqueados',
+            title: Translations.text(context, 'blocked_users'),
+            subtitle: Translations.text(context, 'blocked_users_subtitle'),
           ),
           _SettingsTile(
             icon: Icons.download,
-            title: 'Fotos descargadas',
-            subtitle: 'Solicitar fotos de publicaciones descargadas',
+            title: Translations.text(context, 'downloaded_photos'),
+            subtitle: Translations.text(context, 'downloaded_photos_subtitle'),
           ),
           _SettingsTile(
             icon: Icons.history,
-            title: 'Historial visto',
-            subtitle: 'Historial de publicaciones vistas',
+            title: Translations.text(context, 'view_history'),
+            subtitle: Translations.text(context, 'view_history_subtitle'),
           ),
           _SettingsTile(
             icon: Icons.lock,
-            title: 'Privacidad',
-            subtitle: 'Privacidad',
+            title: Translations.text(context, 'privacy'),
+            subtitle: Translations.text(context, 'privacy_subtitle'),
           ),
           _SettingsTile(
             icon: Icons.help_outline,
-            title: 'Solicitar ayuda',
-            subtitle: 'Solicitar ayuda',
+            title: Translations.text(context, 'help_request'),
+            subtitle: Translations.text(context, 'help_request_subtitle'),
           ),
         ],
       ),
@@ -727,11 +792,13 @@ class _SettingsTile extends StatelessWidget {
     required this.icon,
     required this.title,
     required this.subtitle,
+    this.onTap,
   });
 
   final IconData icon;
   final String title;
   final String subtitle;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -743,7 +810,7 @@ class _SettingsTile extends StatelessWidget {
       title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
       subtitle: Text(subtitle),
       trailing: const Icon(Icons.chevron_right),
-      onTap: () {},
+      onTap: onTap,
     );
   }
 }

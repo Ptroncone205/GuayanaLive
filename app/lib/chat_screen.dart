@@ -12,6 +12,7 @@ import 'camera_screen.dart';
 import 'services/groq_service.dart';
 import 'utils/video_preview_frames.dart';
 import 'auth_modal.dart'; // Importación añadida para mostrar el modal
+import 'translations.dart';
 
 /// Adjunto listo para enviar a la IA (ruta local y/o bytes en web).
 class _PendingAttachment {
@@ -83,16 +84,27 @@ class ChatScreenState extends State<ChatScreen> {
   static int _guestTextCount = 0;
   static int _guestScanCount = 0;
 
-  final List<ChatMessage> _messages = [
-    ChatMessage(
-      sender: 'ia',
-      type: 'text',
-      text:
-          'Hola, soy la profesora Florencia, tu asistente IA de GuayanaLive. Puedes hacerme preguntas, o adjuntar una imagen, un video o un audio. '
-          'En video se envían fotogramas del clip (en el navegador y en el móvil) y, si el archivo no es demasiado grande, también el audio transcrito. '
-          '(Los invitados solo pueden analizar una imagen.)',
-    ),
-  ];
+  final List<ChatMessage> _messages = [];
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_messages.isEmpty) {
+      _messages.add(
+        ChatMessage(
+          sender: 'ia',
+          type: 'text',
+          text: Translations.text(context, 'ai_welcome_message'),
+        ),
+      );
+    } else if (_messages[0].sender == 'ia' && _messages.length == 1) {
+      _messages[0] = ChatMessage(
+        sender: 'ia',
+        type: 'text',
+        text: Translations.text(context, 'ai_welcome_message'),
+      );
+    }
+  }
 
   @override
   void initState() {
@@ -234,7 +246,7 @@ class ChatScreenState extends State<ChatScreen> {
     });
 
     _addMessage(
-      ChatMessage(sender: 'ia', type: 'text', text: 'Escribiendo...'),
+      ChatMessage(sender: 'ia', type: 'text', text: Translations.text(context, 'typing')),
     );
 
     try {
@@ -264,26 +276,23 @@ class ChatScreenState extends State<ChatScreen> {
         } else {
           if (!mounted) return;
           setState(() {
-            final lastIndex = _messages.lastIndexWhere(
-              (m) => m.sender == 'ia' && m.text == 'Escribiendo...',
-            );
-            if (lastIndex != -1) {
-              _messages[lastIndex] = ChatMessage(
-                sender: 'ia',
-                type: 'text',
-                text:
-                    'Este video es demasiado grande y no se pudieron extraer fotogramas '
-                    'en este dispositivo. Prueba con un clip más corto (menos de ~2 MB) '
-                    'o envía una foto de la especie.',
+              final lastIndex = _messages.lastIndexWhere(
+                (m) => m.sender == 'ia' && m.text == Translations.text(context, 'typing'),
               );
-            }
+              if (lastIndex != -1) {
+                _messages[lastIndex] = ChatMessage(
+                  sender: 'ia',
+                  type: 'text',
+                  text: Translations.text(context, 'video_too_large'),
+                );
+              }
           });
           return;
         }
       }
 
       final history = _messages
-          .where((m) => m.text != 'Escribiendo...')
+          .where((m) => m.text != Translations.text(context, 'typing'))
           .map(
             (m) => {
               'role': m.sender == 'user' ? 'user' : 'assistant',
@@ -304,7 +313,7 @@ class ChatScreenState extends State<ChatScreen> {
 
       setState(() {
         final lastIndex = _messages.lastIndexWhere(
-          (m) => m.sender == 'ia' && m.text == 'Escribiendo...',
+          (m) => m.sender == 'ia' && m.text == Translations.text(context, 'typing'),
         );
         if (lastIndex != -1) {
           _messages[lastIndex] = ChatMessage(
@@ -318,10 +327,10 @@ class ChatScreenState extends State<ChatScreen> {
       });
     } catch (e) {
       if (!mounted) return;
-      final errorMessage = 'Error al conectar con la IA: ${e.toString()}';
+      final errorMessage = '${Translations.text(context, 'error_connecting_ai')}: ${e.toString()}';
       setState(() {
         final lastIndex = _messages.lastIndexWhere(
-          (m) => m.sender == 'ia' && m.text == 'Escribiendo...',
+          (m) => m.sender == 'ia' && m.text == Translations.text(context, 'typing'),
         );
         if (lastIndex != -1) {
           _messages[lastIndex] = ChatMessage(
@@ -358,16 +367,16 @@ class ChatScreenState extends State<ChatScreen> {
             mainAxisSize: MainAxisSize.min,
             children: [
               ListTile(
-                title: const Text('Adjuntar archivo'),
+                title: Text(Translations.text(context, 'attach_file')),
                 subtitle: Text(
                   isGuest
-                      ? 'Como invitado solo puedes analizar una imagen (galería o cámara).'
-                      : 'Imagen, video o audio',
+                      ? Translations.text(context, 'guest_attachment_limit')
+                      : Translations.text(context, 'image_video_audio'),
                 ),
               ),
               ListTile(
                 leading: const Icon(Icons.photo_library, color: Colors.green),
-                title: const Text('Elegir imagen'),
+                title: Text(Translations.text(context, 'choose_image')),
                 onTap: () async {
                   Navigator.of(sheetContext).pop();
                   await _pickImage(ImageSource.gallery);
@@ -376,7 +385,7 @@ class ChatScreenState extends State<ChatScreen> {
               if (!isGuest) ...[
                 ListTile(
                   leading: const Icon(Icons.video_library, color: Colors.green),
-                  title: const Text('Elegir video'),
+                  title: Text(Translations.text(context, 'choose_video')),
                   onTap: () async {
                     Navigator.of(sheetContext).pop();
                     await _pickVideo();
@@ -384,7 +393,7 @@ class ChatScreenState extends State<ChatScreen> {
                 ),
                 ListTile(
                   leading: const Icon(Icons.audio_file, color: Colors.green),
-                  title: const Text('Elegir audio'),
+                  title: Text(Translations.text(context, 'choose_audio')),
                   onTap: () async {
                     Navigator.of(sheetContext).pop();
                     await _pickAudio();
@@ -393,7 +402,7 @@ class ChatScreenState extends State<ChatScreen> {
               ],
               ListTile(
                 leading: const Icon(Icons.qr_code_scanner, color: Colors.green),
-                title: const Text('Abrir cámara'),
+                title: Text(Translations.text(context, 'open_camera')),
                 onTap: () async {
                   Navigator.of(sheetContext).pop();
                   await _openCamera();
@@ -415,7 +424,7 @@ class ChatScreenState extends State<ChatScreen> {
       if (!mounted) return;
       if (pickedFile == null) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('No se seleccionó ninguna imagen.')),
+          SnackBar(content: Text(Translations.text(context, 'no_image_selected'))),
         );
         return;
       }
@@ -426,7 +435,7 @@ class ChatScreenState extends State<ChatScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error al seleccionar imagen: $e')),
+        SnackBar(content: Text('${Translations.text(context, 'error_selecting_image')}: $e')),
       );
     }
   }
@@ -437,7 +446,7 @@ class ChatScreenState extends State<ChatScreen> {
       if (!mounted) return;
       if (picked == null) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('No se seleccionó ningún video.')),
+          SnackBar(content: Text(Translations.text(context, 'no_video_selected'))),
         );
         return;
       }
@@ -448,7 +457,7 @@ class ChatScreenState extends State<ChatScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error al seleccionar video: $e')),
+        SnackBar(content: Text('${Translations.text(context, 'error_selecting_video')}: $e')),
       );
     }
   }
@@ -510,7 +519,7 @@ class ChatScreenState extends State<ChatScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error al seleccionar audio: $e')),
+        SnackBar(content: Text('${Translations.text(context, 'error_selecting_audio')}: $e')),
       );
     }
   }
@@ -550,7 +559,7 @@ class ChatScreenState extends State<ChatScreen> {
               child: Text(
                 message.attachmentPath != null && !kIsWeb
                     ? message.attachmentPath!.split(Platform.pathSeparator).last
-                    : 'Video adjunto',
+                    : Translations.text(context, 'attached_video'),
                 style: TextStyle(color: textColor, fontSize: 13),
               ),
             ),
@@ -565,7 +574,7 @@ class ChatScreenState extends State<ChatScreen> {
               child: Text(
                 message.attachmentPath != null && !kIsWeb
                     ? message.attachmentPath!.split(Platform.pathSeparator).last
-                    : 'Audio adjunto',
+                    : Translations.text(context, 'attached_audio'),
                 style: TextStyle(color: textColor, fontSize: 13),
               ),
             ),
@@ -655,16 +664,13 @@ class ChatScreenState extends State<ChatScreen> {
                 fit: BoxFit.cover,
               ),
       );
-      label =
-          'Imagen seleccionada. Escribe un mensaje para enviarla junto con la solicitud.';
+      label = Translations.text(context, 'image_selected_prompt');
     } else if (p.isVideo) {
       thumb = const Icon(Icons.videocam, size: 48, color: Colors.green);
-      label =
-          'Video seleccionado. Escribe un mensaje (opcional); si no, se analizará el audio del clip.';
+      label = Translations.text(context, 'video_selected_prompt');
     } else {
       thumb = const Icon(Icons.audiotrack, size: 48, color: Colors.green);
-      label =
-          'Audio seleccionado. Escribe un mensaje (opcional); si no, se transcribirá y analizará.';
+      label = Translations.text(context, 'audio_selected_prompt');
     }
 
     return Row(
@@ -686,7 +692,7 @@ class ChatScreenState extends State<ChatScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Chat entre usuarios'),
+        title: const Text('Private Messages'),
       ),
       body: Column(
         children: [
@@ -738,12 +744,12 @@ class ChatScreenState extends State<ChatScreen> {
                     textInputAction: TextInputAction.send,
                     onSubmitted: (_) => _sendMessage(),
                     enabled: !_isLoading,
-                    decoration: const InputDecoration(
-                      hintText: 'Escribe un mensaje...',
-                      border: OutlineInputBorder(
+                    decoration: InputDecoration(
+                      hintText: Translations.text(context, 'type_a_message'),
+                      border: const OutlineInputBorder(
                         borderRadius: BorderRadius.all(Radius.circular(24.0)),
                       ),
-                      contentPadding: EdgeInsets.symmetric(horizontal: 16.0),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 16.0),
                     ),
                   ),
                 ),
