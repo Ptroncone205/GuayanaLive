@@ -469,18 +469,43 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               
                               // BOTONES DE ACCIÓN (Editar o Mensaje)
                               if (_isMyProfile)
-                                ElevatedButton(
-                                  onPressed: isGuest 
-                                      ? () => showAuthModal(context) 
-                                      : (_isEditing || _isSetupMode ? _saveProfile : () => setState(() => _isEditing = true)),
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: primaryColor,
-                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-                                  ),
-                                  child: Text(
-                                    isGuest ? 'Iniciar sesión / Registrarse' : (_isEditing || _isSetupMode ? 'Guardar perfil' : 'Editar perfil'), 
-                                    style: const TextStyle(color: Colors.white)
-                                  ),
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: ElevatedButton(
+                                        onPressed: isGuest 
+                                            ? () => showAuthModal(context) 
+                                            : (_isEditing || _isSetupMode ? _saveProfile : () => setState(() => _isEditing = true)),
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: primaryColor,
+                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                                        ),
+                                        child: Text(
+                                          isGuest ? 'Iniciar sesión / Registrarse' : (_isEditing || _isSetupMode ? 'Guardar perfil' : 'Editar perfil'), 
+                                          style: const TextStyle(color: Colors.white),
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    if (!isGuest && !_isEditing && !_isSetupMode)
+                                      SizedBox(
+                                        height: 44,
+                                        child: OutlinedButton(
+                                          onPressed: () {
+                                            Navigator.of(context).push(
+                                              MaterialPageRoute(
+                                                builder: (_) => const ProfileSettingsScreen(),
+                                              ),
+                                            );
+                                          },
+                                          style: OutlinedButton.styleFrom(
+                                            side: BorderSide(color: Colors.white.withOpacity(0.7)),
+                                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                                          ),
+                                          child: const Icon(Icons.settings, color: Colors.white),
+                                        ),
+                                      ),
+                                  ],
                                 )
                               else if (!isGuest)
                                 Row(
@@ -630,5 +655,85 @@ class _ProfileScreenState extends State<ProfileScreen> {
       );
     }
     return content;
+  }
+}
+
+class ProfileSettingsScreen extends StatelessWidget {
+  const ProfileSettingsScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Ajustes'),
+        backgroundColor: Theme.of(context).primaryColor,
+      ),
+      body: ListView(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        children: const [
+          _SettingsTile(
+            icon: Icons.brightness_6,
+            title: 'Modo oscuro',
+            subtitle: 'Cambiar el color de los menús a modo oscuro',
+          ),
+          _SettingsTile(
+            icon: Icons.language,
+            title: 'Idioma',
+            subtitle: 'Colocar la aplicación en otro idioma',
+          ),
+          _SettingsTile(
+            icon: Icons.block,
+            title: 'Usuarios bloqueados',
+            subtitle: 'Ver usuarios bloqueados',
+          ),
+          _SettingsTile(
+            icon: Icons.download,
+            title: 'Fotos descargadas',
+            subtitle: 'Solicitar fotos de publicaciones descargadas',
+          ),
+          _SettingsTile(
+            icon: Icons.history,
+            title: 'Historial visto',
+            subtitle: 'Historial de publicaciones vistas',
+          ),
+          _SettingsTile(
+            icon: Icons.lock,
+            title: 'Privacidad',
+            subtitle: 'Privacidad',
+          ),
+          _SettingsTile(
+            icon: Icons.help_outline,
+            title: 'Solicitar ayuda',
+            subtitle: 'Solicitar ayuda',
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SettingsTile extends StatelessWidget {
+  const _SettingsTile({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+  });
+
+  final IconData icon;
+  final String title;
+  final String subtitle;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListTile(
+      leading: CircleAvatar(
+        backgroundColor: Theme.of(context).primaryColor.withOpacity(0.1),
+        child: Icon(icon, color: Theme.of(context).primaryColor),
+      ),
+      title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
+      subtitle: Text(subtitle),
+      trailing: const Icon(Icons.chevron_right),
+      onTap: () {},
+    );
   }
 }
