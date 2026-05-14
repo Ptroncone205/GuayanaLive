@@ -10,7 +10,7 @@ import 'login_screen.dart';
 import 'profile_screen.dart';
 
 // Global notifier for guest mode
-final ValueNotifier<bool> guestModeNotifier = ValueNotifier(true);
+final ValueNotifier<bool> guestModeNotifier = ValueNotifier(false);
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();

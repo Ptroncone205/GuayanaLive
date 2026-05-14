@@ -117,20 +117,24 @@ class _MainLayoutState extends State<MainLayout> {
   void _onItemTapped(int index) {
     bool isGuest = Supabase.instance.client.auth.currentUser == null;
 
+    if (index == 0) {
+      pinterestKey.currentState?.fetchPins();
+    }
+    ;
+
     if ((index == 4 || index == 2) && isGuest) {
       showAuthModal(context);
       return;
     }
 
     if (index == 2) {
-  pinterestKey.currentState?.showAddPostOptions().then((_) async {
-    if (mounted) {
-      await pinterestKey.currentState?.fetchPins();
+      pinterestKey.currentState?.showAddPostOptions().then((_) async {
+        if (mounted) {
+          await pinterestKey.currentState?.fetchPins();
+        }
+      });
+      return;
     }
-  });
-
-  return;
-}
 
     setState(() {
       _selectedIndex = index;
