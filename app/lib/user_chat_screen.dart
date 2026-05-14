@@ -196,7 +196,6 @@ class _UserChatScreenState extends State<UserChatScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Chat entre usuarios'),
-        backgroundColor: Colors.green.shade700,
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),

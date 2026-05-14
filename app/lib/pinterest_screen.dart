@@ -48,7 +48,7 @@ class PinterestScreenState extends State<PinterestScreen> {
   void initState() {
     super.initState();
     _fetchExistingTags();
-    _fetchPins();
+    fetchPins();
     _searchController.addListener(() {
       _filterPins(_searchController.text);
     });
@@ -62,7 +62,7 @@ class PinterestScreenState extends State<PinterestScreen> {
     super.dispose();
   }
 
-  Future<void> _fetchPins() async {
+  Future<void> fetchPins() async {
     setState(() => _isLoading = true);
     try {
       final pinResponse = await _supabase
@@ -245,7 +245,7 @@ class PinterestScreenState extends State<PinterestScreen> {
         await _notifyFollowersAboutNewPin(pinId);
       }
 
-      await _fetchPins();
+      await fetchPins();
       await _fetchExistingTags();
 
       if (mounted) {
@@ -959,7 +959,7 @@ class PinterestScreenState extends State<PinterestScreen> {
                                 const SizedBox(height: 16),
                                 const Text('No se encontraron publicaciones.'),
                                 TextButton(
-                                  onPressed: _fetchPins,
+                                  onPressed: fetchPins,
                                   child: Text(
                                     'Recargar',
                                     style: TextStyle(
@@ -971,7 +971,7 @@ class PinterestScreenState extends State<PinterestScreen> {
                             ),
                           )
                         : RefreshIndicator(
-                            onRefresh: _fetchPins,
+                            onRefresh: fetchPins,
                             color: Theme.of(context).primaryColor,
                             child: MasonryGridView.count(
                               crossAxisCount:
@@ -1019,7 +1019,7 @@ class PinterestScreenState extends State<PinterestScreen> {
 
                                     // Reload pins after returning
                                     if (mounted) {
-                                      await _fetchPins();
+                                      await fetchPins();
                                     }
                                   },
                                   child: ClipRRect(

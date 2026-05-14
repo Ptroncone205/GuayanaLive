@@ -13,7 +13,10 @@ import 'map_screen.dart'; // Tu nueva pantalla de mapa
 
 final GlobalKey<PinterestScreenState> pinterestKey =
     GlobalKey<PinterestScreenState>();
-final GlobalKey<ChatScreenState> chatKey = GlobalKey<ChatScreenState>();
+final GlobalKey<ChatScreenState> chatKey = 
+    GlobalKey<ChatScreenState>();
+final GlobalKey<PinterestScreenState> pinterestScreenKey =
+    GlobalKey<PinterestScreenState>();
 
 class MainLayout extends StatefulWidget {
   const MainLayout({super.key});
@@ -35,7 +38,14 @@ class _MainLayoutState extends State<MainLayout> {
     const UserChatScreen(), // Stack Index 3
     const ProfileScreen(), // Stack Index 4
   ];
+  int get _bottomNavIndex {
+  // Prevent the "Add" button from becoming selected
+  if (_selectedIndex == 2) {
+    return 0;
+  }
 
+  return _selectedIndex;
+}
   // Logic to determine which screen from the list above to show
   int get _activeScreenIndex {
     switch (_selectedIndex) {
@@ -112,9 +122,14 @@ class _MainLayoutState extends State<MainLayout> {
     }
 
     if (index == 2) {
-      pinterestKey.currentState?.showAddPostOptions();
-      return;
+  pinterestKey.currentState?.showAddPostOptions().then((_) async {
+    if (mounted) {
+      await pinterestKey.currentState?.fetchPins();
     }
+  });
+
+  return;
+}
 
     setState(() {
       _selectedIndex = index;
@@ -252,7 +267,7 @@ class _MainLayoutState extends State<MainLayout> {
           backgroundColor: Colors.transparent,
           type: BottomNavigationBarType.fixed,
           elevation: 0,
-          currentIndex: _selectedIndex,
+          currentIndex: _bottomNavIndex,
           onTap: _onItemTapped,
           showSelectedLabels: false,
           showUnselectedLabels: false,
