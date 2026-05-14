@@ -393,31 +393,105 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
-  Widget _buildInfoField({required String label, required TextEditingController controller, bool isBiography = false}) {
-    final bool isEditable = _isEditing || _isSetupMode;
+  Widget _buildInfoField({
+  required String label,
+  required TextEditingController controller,
+  bool isBiography = false,
+}) {
+  final bool isEditable = _isEditing || _isSetupMode;
 
-    if ((!isEditable && controller.text.isEmpty) || isGuest) return const SizedBox.shrink();
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(label, style: const TextStyle(fontWeight: FontWeight.w600)),
-        const SizedBox(height: 6),
-        TextField(
-          controller: controller,
-          readOnly: !isEditable,
-          decoration: InputDecoration(
-            filled: !isEditable ? true : false,
-            fillColor: isEditable ? null : Colors.grey.shade100,
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12.0), borderSide: BorderSide.none),
-            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-          ),
-          maxLines: isBiography ? 3 : 1,
-        ),
-        const SizedBox(height: 12),
-      ],
-    );
+  // Hide empty fields in view mode
+  if ((!isEditable && controller.text.isEmpty) || isGuest) {
+    return const SizedBox.shrink();
   }
+
+  return Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Padding(
+        padding: const EdgeInsets.only(left: 4, bottom: 8),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontWeight: FontWeight.w700,
+            fontSize: 15,
+            color: Colors.grey.shade800,
+          ),
+        ),
+      ),
+
+      TextField(
+        controller: controller,
+        readOnly: !isEditable,
+        maxLines: isBiography ? 4 : 1,
+        cursorColor: Theme.of(context).primaryColor,
+
+        style: TextStyle(
+          fontSize: 15,
+          color: isEditable
+              ? Colors.black87
+              : Colors.grey.shade800,
+        ),
+
+        decoration: InputDecoration(
+          hintText: isEditable
+              ? '${Translations.text(context, 'enter')} $label'
+              : null,
+
+          filled: true,
+
+          fillColor: isEditable
+              ? Colors.white
+              : Colors.grey.shade100,
+
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: 16,
+          ),
+
+          // NORMAL BORDER
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: BorderSide(
+              color: Colors.grey.shade300,
+              width: 1.2,
+            ),
+          ),
+
+          // ENABLED BORDER
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: BorderSide(
+              color: isEditable
+                  ? Colors.grey.shade400
+                  : Colors.transparent,
+              width: 1.2,
+            ),
+          ),
+
+          // FOCUSED BORDER
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: BorderSide(
+              color: Theme.of(context).primaryColor,
+              width: 2,
+            ),
+          ),
+
+          // READONLY BORDER
+          disabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: BorderSide(
+              color: Colors.transparent,
+            ),
+          ),
+        ),
+      ),
+
+      const SizedBox(height: 18),
+    ],
+  );
+}
 
   @override
   Widget build(BuildContext context) {
@@ -629,7 +703,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     if (!isGuest) ...[
                       _buildInfoField(label: Translations.text(context, 'name'), controller: _nameController),
                       if (!_isSetupMode)
-                        _buildInfoField(label: Translations.text(context, 'username'), controller: _usernameController),
                       _buildInfoField(label: Translations.text(context, 'biography'), controller: _bioController, isBiography: true),
                       _buildInfoField(label: Translations.text(context, 'location'), controller: _locationController),
                       _buildInfoField(label: Translations.text(context, 'website'), controller: _websiteController),

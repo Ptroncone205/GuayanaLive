@@ -37,6 +37,19 @@ class _PendingAttachment {
     return 'text';
   }
 
+  String get fileName {
+  if (path != null && path!.isNotEmpty) {
+    final normalized = path!.replaceAll('\\', '/');
+    return normalized.split('/').last;
+  }
+
+  if (isImage) return 'image.jpg';
+  if (isVideo) return 'video.mp4';
+  if (isAudio) return 'audio.mp3';
+
+  return 'file';
+}
+
   Future<Uint8List> readBytes() async {
     if (bytes != null) return bytes!;
     return XFile(path!).readAsBytes();
@@ -59,12 +72,14 @@ class ChatMessage {
   final String type;
   final String text;
   final String? attachmentPath;
+  final String? attachmentName;
 
   ChatMessage({
     required this.sender,
     required this.type,
     required this.text,
     this.attachmentPath,
+    this.attachmentName,
   });
 }
 
@@ -85,6 +100,109 @@ class ChatScreenState extends State<ChatScreen> {
   static int _guestScanCount = 0;
 
   final List<ChatMessage> _messages = [];
+
+  Widget _compactAttachmentPreview(
+  ChatMessage message,
+  Color textColor,
+) {
+  IconData icon;
+  String label;
+
+  switch (message.type) {
+    case 'image':
+      icon = Icons.image;
+      label = 'Image';
+      break;
+
+    case 'video':
+      icon = Icons.videocam;
+      label = 'Video';
+      break;
+
+    case 'audio':
+      icon = Icons.audiotrack;
+      label = 'Audio';
+      break;
+
+    default:
+      icon = Icons.insert_drive_file;
+      label = 'File';
+  }
+
+  final bool canPreviewImage =
+      message.type == 'image' &&
+      message.attachmentPath != null;
+
+  return Container(
+    padding: const EdgeInsets.all(10),
+    decoration: BoxDecoration(
+      color: Colors.black.withOpacity(0.08),
+      borderRadius: BorderRadius.circular(14),
+    ),
+    child: Row(
+      children: [
+        // Thumbnail or icon
+        ClipRRect(
+          borderRadius: BorderRadius.circular(10),
+          child: canPreviewImage
+              ? (kIsWeb
+                    ? Image.network(
+                        message.attachmentPath!,
+                        width: 52,
+                        height: 52,
+                        fit: BoxFit.cover,
+                      )
+                    : Image.file(
+                        File(message.attachmentPath!),
+                        width: 52,
+                        height: 52,
+                        fit: BoxFit.cover,
+                      ))
+              : Container(
+                  width: 52,
+                  height: 52,
+                  color: Colors.black.withOpacity(0.08),
+                  child: Icon(
+                    icon,
+                    color: textColor,
+                    size: 28,
+                  ),
+                ),
+        ),
+
+        const SizedBox(width: 12),
+
+        // File info
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                message.attachmentName ?? 'file',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: textColor,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 13,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                label,
+                style: TextStyle(
+                  color: textColor.withOpacity(0.7),
+                  fontSize: 12,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    ),
+  );
+}
 
   @override
   void didChangeDependencies() {
@@ -227,6 +345,7 @@ class ChatScreenState extends State<ChatScreen> {
           type: pending.uiType,
           text: sendText,
           attachmentPath: pending.path,
+          attachmentName: pending.fileName,
         ),
       );
       _sendAIResponse(sendText, pending: pending);
@@ -538,52 +657,6 @@ class ChatScreenState extends State<ChatScreen> {
     });
   }
 
-  Widget _mediaAttachmentPreview(ChatMessage message, Color textColor) {
-    switch (message.type) {
-      case 'image':
-        if (message.attachmentPath == null) {
-          return const SizedBox.shrink();
-        }
-        return ClipRRect(
-          borderRadius: BorderRadius.circular(12.0),
-          child: kIsWeb
-              ? Image.network(message.attachmentPath!, fit: BoxFit.cover)
-              : Image.file(File(message.attachmentPath!), fit: BoxFit.cover),
-        );
-      case 'video':
-        return Row(
-          children: [
-            Icon(Icons.videocam, color: textColor, size: 40),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                message.attachmentPath != null && !kIsWeb
-                    ? message.attachmentPath!.split(Platform.pathSeparator).last
-                    : Translations.text(context, 'attached_video'),
-                style: TextStyle(color: textColor, fontSize: 13),
-              ),
-            ),
-          ],
-        );
-      case 'audio':
-        return Row(
-          children: [
-            Icon(Icons.audiotrack, color: textColor, size: 40),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                message.attachmentPath != null && !kIsWeb
-                    ? message.attachmentPath!.split(Platform.pathSeparator).last
-                    : Translations.text(context, 'attached_audio'),
-                style: TextStyle(color: textColor, fontSize: 13),
-              ),
-            ),
-          ],
-        );
-      default:
-        return const SizedBox.shrink();
-    }
-  }
 
   Widget _buildMessage(ChatMessage message) {
     final isUser = message.sender == 'user';
@@ -624,9 +697,12 @@ class ChatScreenState extends State<ChatScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
-                _mediaAttachmentPreview(message, textColor),
-                const SizedBox(height: 8),
-                Text(message.text, style: TextStyle(color: textColor)),
+                _compactAttachmentPreview(message, textColor),
+
+                if (message.text.trim().isNotEmpty) ...[
+                  const SizedBox(height: 10),
+                  Text(message.text, style: TextStyle(color: textColor)),
+                ],
               ],
             )
           : Text(message.text, style: TextStyle(color: textColor)),
