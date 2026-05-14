@@ -7,7 +7,7 @@ import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 
 import 'auth_modal.dart';
 import 'locale_provider.dart';
-import 'main.dart'; 
+import 'main.dart';
 import 'translations.dart';
 import 'user_chat_screen.dart'; // Importación necesaria para la navegación al chat
 import 'pin_detail_screen.dart'; // Importación para navegar a detalles de pin
@@ -46,9 +46,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
   final _supabase = Supabase.instance.client;
 
   // Getters de utilidad
-  bool get isGuest => widget.userId == null && _supabase.auth.currentUser == null;
-  String get _targetUserId => widget.userId ?? _supabase.auth.currentUser?.id ?? '';
-  bool get _isMyProfile => widget.userId == null || widget.userId == _supabase.auth.currentUser?.id;
+  bool get isGuest =>
+      widget.userId == null && _supabase.auth.currentUser == null;
+  String get _targetUserId =>
+      widget.userId ?? _supabase.auth.currentUser?.id ?? '';
+  bool get _isMyProfile =>
+      widget.userId == null || widget.userId == _supabase.auth.currentUser?.id;
   bool get _isSetupMode => widget.onSetupComplete != null;
 
   @override
@@ -65,7 +68,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Future<void> _fetchProfileData() async {
     if (isGuest) return;
-    
+
     setState(() => _isLoading = true);
     try {
       final profileData = await _supabase
@@ -85,7 +88,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
       final response = await _supabase
           .from('pins')
-          .select('id,title,image_url,width,height,created_at, user_id, profiles(username, avatar_url)') 
+          .select(
+            'id,title,image_url,width,height,created_at, user_id, profiles(username, avatar_url)',
+          )
           .eq('user_id', _targetUserId)
           .order('created_at', ascending: false)
           .limit(9);
@@ -98,15 +103,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ? <Map<String, dynamic>>[]
           : List<Map<String, dynamic>>.from(
               await _supabase
-                  .from('pin_tags')
-                  .select('pin_id, tags(name)')
-                  .inFilter('pin_id', pinIds) 
-              as List);
+                      .from('pin_tags')
+                      .select('pin_id, tags(name)')
+                      .inFilter('pin_id', pinIds)
+                  as List,
+            );
 
       final pinTagsMap = <int, List<String>>{};
       for (final row in tagRows) {
         final pinId = row['pin_id'] as int?;
-        final tag = ((row['tags'] as Map<String, dynamic>?)?['name']) as String?;
+        final tag =
+            ((row['tags'] as Map<String, dynamic>?)?['name']) as String?;
         if (pinId != null && tag != null) {
           pinTagsMap.putIfAbsent(pinId, () => []).add(tag);
         }
@@ -117,14 +124,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ? <int, int>{}
           : Map<int, int>.fromEntries(
               (await _supabase
-                  .from('pin_likes')
-                  .select('pin_id')
-                  .inFilter('pin_id', pinIds) as List)
+                          .from('pin_likes')
+                          .select('pin_id')
+                          .inFilter('pin_id', pinIds)
+                      as List)
                   .map((row) => row['pin_id'] as int)
                   .fold<Map<int, int>>({}, (counts, pinId) {
                     counts[pinId] = (counts[pinId] ?? 0) + 1;
                     return counts;
-                  }).entries);
+                  })
+                  .entries,
+            );
 
       if (mounted) {
         setState(() {
@@ -132,7 +142,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
             final pinId = pin['id'] as int?;
             return {
               ...pin,
-              'tags': pinId != null ? List<String>.from(pinTagsMap[pinId] ?? []) : <String>[],
+              'tags': pinId != null
+                  ? List<String>.from(pinTagsMap[pinId] ?? [])
+                  : <String>[],
               'like_count': pinId != null ? likeCounts[pinId] ?? 0 : 0,
             };
           }).toList();
@@ -151,13 +163,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (_supabase.auth.currentUser == null) return;
 
     try {
-      final followRes = await _supabase.from('follows').select('id')
+      final followRes = await _supabase
+          .from('follows')
+          .select('id')
           .eq('follower_id', _supabase.auth.currentUser!.id)
           .eq('followee_id', _targetUserId)
           .maybeSingle();
 
-      final followersRes = await _supabase.from('follows').select('id').eq('followee_id', _targetUserId);
-      final followingRes = await _supabase.from('follows').select('id').eq('follower_id', _targetUserId);
+      final followersRes = await _supabase
+          .from('follows')
+          .select('id')
+          .eq('followee_id', _targetUserId);
+      final followingRes = await _supabase
+          .from('follows')
+          .select('id')
+          .eq('follower_id', _targetUserId);
 
       if (mounted) {
         setState(() {
@@ -172,123 +192,115 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _toggleFollow() async {
-  final currentUser = _supabase.auth.currentUser;
+    final currentUser = _supabase.auth.currentUser;
 
-  if (currentUser == null) {
-    showAuthModal(context);
-    return;
-  }
+    if (currentUser == null) {
+      showAuthModal(context);
+      return;
+    }
 
-  if (_isMyProfile) return;
+    if (_isMyProfile) return;
 
-  // Prevent spam taps
-  if (_isLoading) return;
+    // Prevent spam taps
+    if (_isLoading) return;
 
-  setState(() => _isLoading = true);
+    setState(() => _isLoading = true);
 
-  try {
-    if (_isFollowing) {
-      // UNFOLLOW
-      await _supabase
-          .from('follows')
-          .delete()
-          .match({
-            'follower_id': currentUser.id,
-            'followee_id': _targetUserId,
-          });
-
-      if (mounted) {
-        setState(() {
-          _isFollowing = false;
-          _followersCount =
-              (_followersCount - 1).clamp(0, 999999);
-        });
-      }
-    } else {
-      // CHECK FIRST (prevents duplicate insert)
-      final existing = await _supabase
-          .from('follows')
-          .select('id')
-          .eq('follower_id', currentUser.id)
-          .eq('followee_id', _targetUserId)
-          .maybeSingle();
-
-      if (existing == null) {
-        await _supabase.from('follows').insert({
+    try {
+      if (_isFollowing) {
+        // UNFOLLOW
+        await _supabase.from('follows').delete().match({
           'follower_id': currentUser.id,
           'followee_id': _targetUserId,
-          'created_at': DateTime.now()
-              .toUtc()
-              .toIso8601String(),
         });
 
-        // FOLLOW NOTIFICATION
-        final myProfileRes = await _supabase
-            .from('profiles')
-            .select('full_name, username')
-            .eq('id', currentUser.id)
+        if (mounted) {
+          setState(() {
+            _isFollowing = false;
+            _followersCount = (_followersCount - 1).clamp(0, 999999);
+          });
+        }
+      } else {
+        // CHECK FIRST (prevents duplicate insert)
+        final existing = await _supabase
+            .from('follows')
+            .select('id')
+            .eq('follower_id', currentUser.id)
+            .eq('followee_id', _targetUserId)
             .maybeSingle();
 
-        final myName = myProfileRes != null
-            ? (myProfileRes['full_name'] as String?) ??
-                (myProfileRes['username'] as String?) ??
-                'Usuario'
-            : 'Usuario';
+        if (existing == null) {
+          await _supabase.from('follows').insert({
+            'follower_id': currentUser.id,
+            'followee_id': _targetUserId,
+            'created_at': DateTime.now().toUtc().toIso8601String(),
+          });
 
-        await _supabase.from('notifications').insert({
-          'user_id': _targetUserId,
-          'actor_id': currentUser.id,
-          'type': 'follow',
-          'title': 'Nuevo seguidor',
-          'message': '$myName comenzó a seguirte.',
-          'reference_id': currentUser.id,
-          'is_read': false,
-          'created_at': DateTime.now()
-              .toUtc()
-              .toIso8601String(),
-        });
+          // FOLLOW NOTIFICATION
+          final myProfileRes = await _supabase
+              .from('profiles')
+              .select('full_name, username')
+              .eq('id', currentUser.id)
+              .maybeSingle();
+
+          final myName = myProfileRes != null
+              ? (myProfileRes['full_name'] as String?) ??
+                    (myProfileRes['username'] as String?) ??
+                    'Usuario'
+              : 'Usuario';
+
+          await _supabase.from('notifications').insert({
+            'user_id': _targetUserId,
+            'actor_id': currentUser.id,
+            'type': 'follow',
+            'title': 'Nuevo seguidor',
+            'message': '$myName comenzó a seguirte.',
+            'reference_id': currentUser.id,
+            'is_read': false,
+            'created_at': DateTime.now().toUtc().toIso8601String(),
+          });
+        }
+
+        if (mounted) {
+          setState(() {
+            _isFollowing = true;
+            _followersCount += 1;
+          });
+        }
       }
+
+      // FINAL SYNC WITH DATABASE
+      await _fetchFollowInfo();
+    } catch (e) {
+      debugPrint('Follow error: $e');
 
       if (mounted) {
-        setState(() {
-          _isFollowing = true;
-          _followersCount += 1;
-        });
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error updating follow: $e')));
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
       }
     }
-
-    // FINAL SYNC WITH DATABASE
-    await _fetchFollowInfo();
-  } catch (e) {
-    debugPrint('Follow error: $e');
-
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Error updating follow: $e',
-          ),
-        ),
-      );
-    }
-  } finally {
-    if (mounted) {
-      setState(() => _isLoading = false);
-    }
   }
-}
+
   // Lógica para iniciar o abrir un chat existente
   Future<void> _startChatWithUser() async {
     final currentUser = _supabase.auth.currentUser;
     if (currentUser == null) return;
-    
+
     setState(() => _isLoading = true);
 
     try {
       // 1. Buscar si ya existe un hilo entre estos dos usuarios
-      final existingThread = await _supabase.from('chat_threads')
+      final existingThread = await _supabase
+          .from('chat_threads')
           .select('id')
-          .or('and(user1_id.eq.${currentUser.id},user2_id.eq.$_targetUserId),and(user1_id.eq.$_targetUserId,user2_id.eq.${currentUser.id})')
+          .or(
+            'and(user1_id.eq.${currentUser.id},user2_id.eq.$_targetUserId),and(user1_id.eq.$_targetUserId,user2_id.eq.${currentUser.id})',
+          )
           .maybeSingle();
 
       String threadId;
@@ -296,32 +308,44 @@ class _ProfileScreenState extends State<ProfileScreen> {
         threadId = existingThread['id'];
       } else {
         // 2. Si no existe, crear uno nuevo
-        final insertRes = await _supabase.from('chat_threads').insert({
-          'user1_id': currentUser.id,
-          'user2_id': _targetUserId,
-          'last_message': Translations.text(context, 'chat_started'),
-        }).select('id').single();
+        final insertRes = await _supabase
+            .from('chat_threads')
+            .insert({
+              'user1_id': currentUser.id,
+              'user2_id': _targetUserId,
+              'last_message': Translations.text(context, 'chat_started'),
+            })
+            .select('id')
+            .single();
         threadId = insertRes['id'];
       }
 
       final partner = ChatPartner(
         id: _targetUserId,
-        name: _nameController.text.isNotEmpty ? _nameController.text : Translations.text(context, 'user'),
+        name: _nameController.text.isNotEmpty
+            ? _nameController.text
+            : Translations.text(context, 'user'),
         avatarUrl: _avatarUrl,
       );
 
       if (!mounted) return;
-      Navigator.of(context).push(MaterialPageRoute(
-        builder: (_) => UserChatThreadScreen(
-          threadId: threadId,
-          currentUserId: currentUser.id,
-          partner: partner,
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => UserChatThreadScreen(
+            threadId: threadId,
+            currentUserId: currentUser.id,
+            partner: partner,
+          ),
         ),
-      ));
+      );
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('${Translations.text(context, 'error_starting_chat')}: $e')),
+          SnackBar(
+            content: Text(
+              '${Translations.text(context, 'error_starting_chat')}: $e',
+            ),
+          ),
         );
       }
     } finally {
@@ -332,13 +356,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Future<void> _updateAvatar() async {
     if (!_isMyProfile || isGuest) return;
 
-    final pickedFile = await _picker.pickImage(source: ImageSource.gallery, imageQuality: 80);
+    final pickedFile = await _picker.pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 80,
+    );
     if (pickedFile == null) return;
 
     setState(() => _isLoading = true);
     try {
       final fileExt = pickedFile.name.split('.').last;
-      final fileName = '${_targetUserId}_${DateTime.now().millisecondsSinceEpoch}.$fileExt';
+      final fileName =
+          '${_targetUserId}_${DateTime.now().millisecondsSinceEpoch}.$fileExt';
 
       if (kIsWeb) {
         final bytes = await pickedFile.readAsBytes();
@@ -348,7 +376,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
         await _supabase.storage.from('avatars').upload(fileName, file);
       }
 
-      final newAvatarUrl = _supabase.storage.from('avatars').getPublicUrl(fileName);
+      final newAvatarUrl = _supabase.storage
+          .from('avatars')
+          .getPublicUrl(fileName);
 
       await _supabase.from('profiles').upsert({
         'id': _targetUserId,
@@ -357,7 +387,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
       setState(() => _avatarUrl = newAvatarUrl);
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(Translations.text(context, 'error_updating_photo', {'error': e.toString()}))));
+      if (mounted)
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              Translations.text(context, 'error_updating_photo', {
+                'error': e.toString(),
+              }),
+            ),
+          ),
+        );
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -365,7 +404,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Future<void> _saveProfile() async {
     if (_nameController.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(Translations.text(context, 'name_required'))));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(Translations.text(context, 'name_required'))),
+      );
       return;
     }
 
@@ -380,14 +421,25 @@ class _ProfileScreenState extends State<ProfileScreen> {
       });
 
       setState(() => _isEditing = false);
-      
+
       if (_isSetupMode && widget.onSetupComplete != null) {
         widget.onSetupComplete!();
       } else if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(Translations.text(context, 'profile_saved'))));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(Translations.text(context, 'profile_saved'))),
+        );
       }
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(Translations.text(context, 'error_saving_profile', {'error': e.toString()}))));
+      if (mounted)
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              Translations.text(context, 'error_saving_profile', {
+                'error': e.toString(),
+              }),
+            ),
+          ),
+        );
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -499,7 +551,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     final content = Scaffold(
       appBar: AppBar(
-        title: Text(_isSetupMode ? Translations.text(context, 'complete_profile') : (_isMyProfile ? Translations.text(context, 'my_profile') : Translations.text(context, 'profile'))),
+        title: Text(
+          _isSetupMode
+              ? Translations.text(context, 'complete_profile')
+              : (_isMyProfile
+                    ? Translations.text(context, 'my_profile')
+                    : Translations.text(context, 'profile')),
+        ),
         actions: [
           if (_isMyProfile)
             IconButton(
@@ -513,8 +571,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   _supabase.auth.signOut();
                 }
               },
-              tooltip: isGuest ? Translations.text(context, 'logout_guest') : Translations.text(context, 'logout'),
-            )
+              tooltip: isGuest
+                  ? Translations.text(context, 'logout_guest')
+                  : Translations.text(context, 'logout'),
+            ),
         ],
       ),
       body: _isLoading && _posts.isEmpty && !_isSetupMode
@@ -529,7 +589,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       Center(
                         child: Text(
                           Translations.text(context, 'welcome'),
-                          style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+                          style: const TextStyle(
+                            fontSize: 24,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                       ),
                       const SizedBox(height: 8),
@@ -545,17 +608,29 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     Row(
                       children: [
                         GestureDetector(
-                          onTap: (_isEditing || _isSetupMode) && !isGuest ? _updateAvatar : null,
+                          onTap: (_isEditing || _isSetupMode) && !isGuest
+                              ? _updateAvatar
+                              : null,
                           child: Stack(
                             children: [
                               CircleAvatar(
                                 radius: 42,
                                 backgroundColor: primaryColor.withOpacity(0.3),
-                                backgroundImage: _avatarUrl != null ? NetworkImage(_avatarUrl!) : null,
-                                child: _avatarUrl == null 
+                                backgroundImage: _avatarUrl != null
+                                    ? NetworkImage(_avatarUrl!)
+                                    : null,
+                                child: _avatarUrl == null
                                     ? Text(
-                                        isGuest ? 'I' : (_nameController.text.isNotEmpty ? _nameController.text[0].toUpperCase() : '?'),
-                                        style: const TextStyle(fontSize: 32, color: Colors.white),
+                                        isGuest
+                                            ? 'I'
+                                            : (_nameController.text.isNotEmpty
+                                                  ? _nameController.text[0]
+                                                        .toUpperCase()
+                                                  : '?'),
+                                        style: const TextStyle(
+                                          fontSize: 32,
+                                          color: Colors.white,
+                                        ),
                                       )
                                     : null,
                               ),
@@ -565,8 +640,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                   right: 0,
                                   child: Container(
                                     padding: const EdgeInsets.all(4),
-                                    decoration: BoxDecoration(color: primaryColor, shape: BoxShape.circle),
-                                    child: const Icon(Icons.camera_alt, size: 16, color: Colors.white),
+                                    decoration: BoxDecoration(
+                                      color: primaryColor,
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: const Icon(
+                                      Icons.camera_alt,
+                                      size: 16,
+                                      color: Colors.white,
+                                    ),
                                   ),
                                 ),
                             ],
@@ -578,28 +660,44 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                isGuest ? Translations.text(context, 'guest') : (_nameController.text.isNotEmpty ? _nameController.text : Translations.text(context, 'user')),
-                                style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+                                isGuest
+                                    ? Translations.text(context, 'guest')
+                                    : (_nameController.text.isNotEmpty
+                                          ? _nameController.text
+                                          : Translations.text(context, 'user')),
+                                style: const TextStyle(
+                                  fontSize: 22,
+                                  fontWeight: FontWeight.bold,
+                                ),
                               ),
                               const SizedBox(height: 4),
                               if (!isGuest)
                                 Text(
-                                  _usernameController.text.isNotEmpty ? '@${_usernameController.text}' : '',
+                                  _usernameController.text.isNotEmpty
+                                      ? '@${_usernameController.text}'
+                                      : '',
                                   style: const TextStyle(color: Colors.grey),
                                 ),
                               if (!isGuest)
                                 Padding(
                                   padding: const EdgeInsets.only(top: 4.0),
                                   child: Text(
-                                    Translations.text(context, 'followers_following_count', {
-                                      'followers': _followersCount.toString(),
-                                      'following': _followingCount.toString(),
-                                    }),
-                                    style: const TextStyle(color: Colors.grey, fontSize: 13),
+                                    Translations.text(
+                                      context,
+                                      'followers_following_count',
+                                      {
+                                        'followers': _followersCount.toString(),
+                                        'following': _followingCount.toString(),
+                                      },
+                                    ),
+                                    style: const TextStyle(
+                                      color: Colors.grey,
+                                      fontSize: 13,
+                                    ),
                                   ),
                                 ),
                               const SizedBox(height: 12),
-                              
+
                               // BOTONES DE ACCIÓN (Editar o Mensaje)
                               if (_isMyProfile)
                                 Row(
@@ -608,16 +706,39 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                     SizedBox(
                                       height: 44,
                                       child: ElevatedButton(
-                                        onPressed: isGuest 
-                                            ? () => showAuthModal(context) 
-                                            : (_isEditing || _isSetupMode ? _saveProfile : () => setState(() => _isEditing = true)),
+                                        onPressed: isGuest
+                                            ? () => showAuthModal(context)
+                                            : (_isEditing || _isSetupMode
+                                                  ? _saveProfile
+                                                  : () => setState(
+                                                      () => _isEditing = true,
+                                                    )),
                                         style: ElevatedButton.styleFrom(
                                           backgroundColor: primaryColor,
-                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius: BorderRadius.circular(
+                                              24,
+                                            ),
+                                          ),
                                         ),
                                         child: Text(
-                                          isGuest ? Translations.text(context, 'login_signup') : (_isEditing || _isSetupMode ? Translations.text(context, 'save_profile') : Translations.text(context, 'edit_profile')),
-                                          style: const TextStyle(color: Colors.white),
+                                          isGuest
+                                              ? Translations.text(
+                                                  context,
+                                                  'login_signup',
+                                                )
+                                              : (_isEditing || _isSetupMode
+                                                    ? Translations.text(
+                                                        context,
+                                                        'save_profile',
+                                                      )
+                                                    : Translations.text(
+                                                        context,
+                                                        'edit_profile',
+                                                      )),
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                          ),
                                         ),
                                       ),
                                     ),
@@ -630,16 +751,27 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                           onPressed: () {
                                             Navigator.of(context).push(
                                               MaterialPageRoute(
-                                                builder: (_) => const ProfileSettingsScreen(),
+                                                builder: (_) =>
+                                                    const ProfileSettingsScreen(),
                                               ),
                                             );
                                           },
                                           style: OutlinedButton.styleFrom(
                                             foregroundColor: primaryColor,
-                                            side: BorderSide(color: Colors.white.withOpacity(0.7)),
-                                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                                            side: BorderSide(
+                                              color: Colors.white.withOpacity(
+                                                0.7,
+                                              ),
+                                            ),
+                                            shape: RoundedRectangleBorder(
+                                              borderRadius:
+                                                  BorderRadius.circular(24),
+                                            ),
                                           ),
-                                          child: Icon(Icons.settings, color: primaryColor),
+                                          child: Icon(
+                                            Icons.settings,
+                                            color: primaryColor,
+                                          ),
                                         ),
                                       ),
                                   ],
@@ -652,14 +784,29 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                       height: 44,
                                       child: ElevatedButton.icon(
                                         onPressed: _startChatWithUser,
-                                        icon: const Icon(Icons.chat_bubble_outline, size: 18),
-                                        label: Text(Translations.text(context, 'send_message')),
+                                        icon: const Icon(
+                                          Icons.chat_bubble_outline,
+                                          size: 18,
+                                        ),
+                                        label: Text(
+                                          Translations.text(
+                                            context,
+                                            'send_message',
+                                          ),
+                                        ),
                                         style: ElevatedButton.styleFrom(
                                           minimumSize: const Size(0, 44),
-                                          padding: const EdgeInsets.symmetric(horizontal: 16),
-                                          backgroundColor: Colors.green.shade700,
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 16,
+                                          ),
+                                          backgroundColor:
+                                              Colors.green.shade700,
                                           foregroundColor: Colors.white,
-                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius: BorderRadius.circular(
+                                              24,
+                                            ),
+                                          ),
                                         ),
                                       ),
                                     ),
@@ -667,19 +814,43 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                     OutlinedButton.icon(
                                       onPressed: _toggleFollow,
                                       icon: Icon(
-                                        _isFollowing ? Icons.check : Icons.person_add,
+                                        _isFollowing
+                                            ? Icons.check
+                                            : Icons.person_add,
                                         size: 18,
                                       ),
-                                      label: Text(_isFollowing ? Translations.text(context, 'following') : Translations.text(context, 'follow')),
+                                      label: Text(
+                                        _isFollowing
+                                            ? Translations.text(
+                                                context,
+                                                'following',
+                                              )
+                                            : Translations.text(
+                                                context,
+                                                'follow',
+                                              ),
+                                      ),
                                       style: OutlinedButton.styleFrom(
                                         minimumSize: const Size(0, 44),
-                                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                                        foregroundColor: _isFollowing ? Colors.green.shade700 : Colors.white,
-                                        backgroundColor: _isFollowing ? Colors.white : Colors.green.shade700,
-                                        side: BorderSide(
-                                          color: _isFollowing ? Colors.green.shade700 : Colors.transparent,
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 16,
                                         ),
-                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                                        foregroundColor: _isFollowing
+                                            ? Colors.green.shade700
+                                            : Colors.white,
+                                        backgroundColor: _isFollowing
+                                            ? Colors.white
+                                            : Colors.green.shade700,
+                                        side: BorderSide(
+                                          color: _isFollowing
+                                              ? Colors.green.shade700
+                                              : Colors.transparent,
+                                        ),
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(
+                                            24,
+                                          ),
+                                        ),
                                       ),
                                     ),
                                   ],
@@ -690,42 +861,56 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ],
                     ),
                     const SizedBox(height: 24),
-                    
+
                     if (isGuest)
                       Padding(
                         padding: const EdgeInsets.only(top: 8.0, bottom: 24.0),
                         child: Text(
                           Translations.text(context, 'register_to_interact'),
-                          style: const TextStyle(color: Colors.grey, fontSize: 16),
+                          style: const TextStyle(
+                            color: Colors.grey,
+                            fontSize: 16,
+                          ),
                         ),
                       ),
 
                     if (!isGuest) ...[
-                      _buildInfoField(label: Translations.text(context, 'name'), controller: _nameController),
+                      _buildInfoField(
+                        label: Translations.text(context, 'name'),
+                        controller: _nameController,
+                      ),
                       if (!_isSetupMode)
                       _buildInfoField(label: Translations.text(context, 'biography'), controller: _bioController, isBiography: true),
                       _buildInfoField(label: Translations.text(context, 'location'), controller: _locationController),
                       _buildInfoField(label: Translations.text(context, 'website'), controller: _websiteController),
                     ],
-                    
+
                     const SizedBox(height: 12),
                     if (!_isSetupMode) ...[
-                        Text(
-                          _isMyProfile && !isGuest
-                              ? Translations.text(context, 'your_recent_posts')
-                              : Translations.text(context, 'recent_posts'),
-                          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                      Text(
+                        _isMyProfile && !isGuest
+                            ? Translations.text(context, 'your_recent_posts')
+                            : Translations.text(context, 'recent_posts'),
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
                         ),
-                        const SizedBox(height: 12),
-                        if (isGuest)
-                          Text(Translations.text(context, 'register_to_post'), style: const TextStyle(color: Colors.grey))
-                        else if (_posts.isEmpty)
-                           Text(
-                             _isMyProfile ? Translations.text(context, 'no_posts_yet') : Translations.text(context, 'no_publications'),
-                             style: const TextStyle(color: Colors.grey),
-                           )
-                        else
-                          MasonryGridView.count(
+                      ),
+                      const SizedBox(height: 12),
+                      if (isGuest)
+                        Text(
+                          Translations.text(context, 'register_to_post'),
+                          style: const TextStyle(color: Colors.grey),
+                        )
+                      else if (_posts.isEmpty)
+                        Text(
+                          _isMyProfile
+                              ? Translations.text(context, 'no_posts_yet')
+                              : Translations.text(context, 'no_publications'),
+                          style: const TextStyle(color: Colors.grey),
+                        )
+                      else
+                        MasonryGridView.count(
                           crossAxisCount:
                               MediaQuery.of(context).size.width > 700 ? 4 : 3,
                           mainAxisSpacing: 8,
@@ -791,7 +976,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             );
                           },
                         ),
-                    ]
+                    ],
                   ],
                 ),
               ),
@@ -799,10 +984,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
 
     if (_isSetupMode) {
-      return PopScope(
-        canPop: false,
-        child: content,
-      );
+      return PopScope(canPop: false, child: content);
     }
     return content;
   }
@@ -858,6 +1040,26 @@ class ProfileSettingsScreen extends StatelessWidget {
     );
   }
 
+  Future<void> _showHelpDialog(BuildContext context) async {
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: Text(Translations.text(context, 'help_tutorial_title')),
+          content: SingleChildScrollView(
+            child: Text(Translations.text(context, 'help_tutorial_text')),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: Text(Translations.text(context, 'cancel')),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -876,33 +1078,15 @@ class ProfileSettingsScreen extends StatelessWidget {
           _SettingsTile(
             icon: Icons.language,
             title: Translations.text(context, 'language'),
-            subtitle: '${Translations.text(context, 'language_subtitle')} • ${Translations.currentLanguageLabel(context)}',
+            subtitle:
+                '${Translations.text(context, 'language_subtitle')} • ${Translations.currentLanguageLabel(context)}',
             onTap: () => _showLanguageDialog(context),
-          ),
-          _SettingsTile(
-            icon: Icons.block,
-            title: Translations.text(context, 'blocked_users'),
-            subtitle: Translations.text(context, 'blocked_users_subtitle'),
-          ),
-          _SettingsTile(
-            icon: Icons.download,
-            title: Translations.text(context, 'downloaded_photos'),
-            subtitle: Translations.text(context, 'downloaded_photos_subtitle'),
-          ),
-          _SettingsTile(
-            icon: Icons.history,
-            title: Translations.text(context, 'view_history'),
-            subtitle: Translations.text(context, 'view_history_subtitle'),
-          ),
-          _SettingsTile(
-            icon: Icons.lock,
-            title: Translations.text(context, 'privacy'),
-            subtitle: Translations.text(context, 'privacy_subtitle'),
           ),
           _SettingsTile(
             icon: Icons.help_outline,
             title: Translations.text(context, 'help_request'),
             subtitle: Translations.text(context, 'help_request_subtitle'),
+            onTap: () => _showHelpDialog(context),
           ),
         ],
       ),
