@@ -692,7 +692,7 @@ class ChatScreenState extends State<ChatScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Private Messages'),
+        title: Text(Translations.text(context, 'virtual_assistant')),
       ),
       body: Column(
         children: [
