@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'translations.dart';
+import 'profile_screen.dart';
+import 'pin_detail_screen.dart';
 
 enum NotificationType { message, follow, like, post }
 
@@ -12,6 +14,8 @@ class NotificationEntry {
     required this.subtitle,
     required this.time,
     required this.isRead,
+    this.actorId,
+    this.referenceId,
   });
 
   final String id;
@@ -20,6 +24,8 @@ class NotificationEntry {
   final String subtitle;
   final String time;
   bool isRead;
+  final String? actorId;
+  final String? referenceId; // pin_id for post/like/comment, user_id for follow
 
   factory NotificationEntry.fromMap(Map<String, dynamic> map) {
     final rawType = (map['type'] as String?) ?? 'message';
@@ -33,6 +39,8 @@ class NotificationEntry {
       time: createdAt != null
           ? _formatTime(DateTime.parse(createdAt).toLocal())
           : 'Ahora',
+      actorId: map['actor_id'] as String?,
+      referenceId: map['reference_id'] as String?,
     );
   }
 
@@ -92,7 +100,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     try {
       final response = await _supabase
           .from('notifications')
-          .select('id, type, title, message, is_read, created_at')
+          .select('id, type, title, message, is_read, created_at, actor_id, reference_id')
           .eq('user_id', user.id)
           .order('created_at', ascending: false);
 
@@ -135,6 +143,89 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         notification.isRead = true;
       }
     });
+  }
+
+  Future<void> _deleteNotification(NotificationEntry notification) async {
+    final prevIndex = _notifications.indexOf(notification);
+    setState(() {
+      _notifications.remove(notification);
+    });
+
+    try {
+      await _supabase.from('notifications').delete().eq('id', notification.id);
+    } catch (e) {
+      debugPrint('Error deleting notification: $e');
+      if (mounted) {
+        setState(() {
+          if (prevIndex >= 0 && prevIndex <= _notifications.length) {
+            _notifications.insert(prevIndex, notification);
+          } else {
+            _notifications.add(notification);
+          }
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(Translations.text(context, 'error_deleting_notification'))),
+        );
+      }
+    }
+  }
+
+  Future<void> _handleNotificationTap(NotificationEntry notification) async {
+    // Mark as read first
+    if (!notification.isRead) {
+      try {
+        await _supabase
+            .from('notifications')
+            .update({'is_read': true})
+            .eq('id', notification.id);
+      } catch (_) {}
+      setState(() => notification.isRead = true);
+    }
+
+    if (!mounted) return;
+
+    switch (notification.type) {
+      case NotificationType.follow:
+        // Navigate to the follower's profile
+        final userId = notification.actorId;
+        if (userId != null) {
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => ProfileScreen(userId: userId),
+            ),
+          );
+        }
+        break;
+
+      case NotificationType.post:
+      case NotificationType.like:
+      case NotificationType.message:
+        // Navigate to the pin
+        final pinIdStr = notification.referenceId;
+        if (pinIdStr != null) {
+          final pinId = int.tryParse(pinIdStr);
+          if (pinId != null) {
+            // Fetch the full pin data first
+            try {
+              final pinRes = await _supabase
+                  .from('pins')
+                  .select('id, title, image_url, width, height, created_at, user_id, profiles(username, avatar_url)')
+                  .eq('id', pinId)
+                  .maybeSingle();
+              if (pinRes != null && mounted) {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => PinDetailScreen(pin: Map<String, dynamic>.from(pinRes)),
+                  ),
+                );
+              }
+            } catch (e) {
+              debugPrint('Error fetching pin for notification: $e');
+            }
+          }
+        }
+        break;
+    }
   }
 
   IconData _iconForType(NotificationType type) {
@@ -199,51 +290,54 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                   separatorBuilder: (context, index) => const Divider(height: 1),
                   itemBuilder: (context, index) {
                     final notification = _notifications[index];
-                    return ListTile(
-                      leading: CircleAvatar(
-                        radius: 20,
-                        backgroundColor:
-                            _iconColorForType(notification.type).withOpacity(0.16),
-                        child: Icon(
-                          _iconForType(notification.type),
-                          color: _iconColorForType(notification.type),
-                        ),
+                    return Dismissible(
+                      key: Key(notification.id),
+                      direction: DismissDirection.endToStart,
+                      background: Container(
+                        alignment: Alignment.centerRight,
+                        padding: const EdgeInsets.only(right: 20.0),
+                        color: Colors.red,
+                        child: const Icon(Icons.delete, color: Colors.white),
                       ),
-                      title: Text(notification.title),
-                      subtitle: Text(notification.subtitle),
-                      trailing: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Text(
-                            notification.time,
-                            style: const TextStyle(fontSize: 12),
-                          ),
-                          if (!notification.isRead)
-                            Container(
-                              margin: const EdgeInsets.only(top: 4),
-                              width: 8,
-                              height: 8,
-                              decoration: const BoxDecoration(
-                                color: Colors.red,
-                                shape: BoxShape.circle,
-                              ),
-                            ),
-                        ],
-                      ),
-                      tileColor: notification.isRead
-                          ? Colors.transparent
-                          : Theme.of(context).primaryColorLight.withOpacity(0.12),
-                      onTap: () async {
-                        if (!notification.isRead) {
-                          try {
-                            await _supabase
-                                .from('notifications')
-                                .update({'is_read': true})
-                                .eq('id', notification.id);
-                          } catch (_) {}
-                          setState(() => notification.isRead = true);
-                        }
+                      onDismissed: (direction) {
+                        _deleteNotification(notification);
                       },
+                      child: ListTile(
+                        leading: CircleAvatar(
+                          radius: 20,
+                          backgroundColor:
+                              _iconColorForType(notification.type).withOpacity(0.16),
+                          child: Icon(
+                            _iconForType(notification.type),
+                            color: _iconColorForType(notification.type),
+                          ),
+                        ),
+                        title: Text(notification.title),
+                        subtitle: Text(notification.subtitle),
+                        trailing: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text(
+                              notification.time,
+                              style: const TextStyle(fontSize: 12),
+                            ),
+                            if (!notification.isRead)
+                              Container(
+                                margin: const EdgeInsets.only(top: 4),
+                                width: 8,
+                                height: 8,
+                                decoration: const BoxDecoration(
+                                  color: Colors.red,
+                                  shape: BoxShape.circle,
+                                ),
+                              ),
+                          ],
+                        ),
+                        tileColor: notification.isRead
+                            ? Colors.transparent
+                            : Theme.of(context).primaryColorLight.withOpacity(0.12),
+                        onTap: () => _handleNotificationTap(notification),
+                      ),
                     );
                   },
                 ),

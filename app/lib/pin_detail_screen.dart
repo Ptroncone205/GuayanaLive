@@ -223,6 +223,34 @@ class _PinDetailScreenState extends State<PinDetailScreen> {
         'user_id': _supabase.auth.currentUser!.id,
       });
 
+      // Notify pin owner
+      final pinOwnerId = widget.pin['user_id'] as String?;
+      final commenterId = _supabase.auth.currentUser!.id;
+      if (pinOwnerId != null && pinOwnerId != commenterId) {
+        try {
+          final myProfile = await _supabase
+              .from('profiles')
+              .select('full_name, username')
+              .eq('id', commenterId)
+              .maybeSingle();
+          final myName = myProfile != null
+              ? (myProfile['full_name'] as String?) ?? (myProfile['username'] as String?) ?? 'Alguien'
+              : 'Alguien';
+          final pinTitle = (widget.pin['title'] as String?) ?? '';
+          await _supabase.from('notifications').insert({
+            'user_id': pinOwnerId,
+            'actor_id': commenterId,
+            'type': 'message',
+            'title': Translations.text(context, 'new_comment_title'),
+            'message': Translations.text(context, 'new_comment_message',
+                {'actor': myName, 'title': pinTitle, 'comment': text}),
+            'reference_id': widget.pin['id'].toString(),
+            'is_read': false,
+            'created_at': DateTime.now().toUtc().toIso8601String(),
+          });
+        } catch (_) {} // Don't block comment if notification fails
+      }
+
       await _fetchComments();
     } catch (e) {
       if (mounted) {
@@ -342,6 +370,33 @@ class _PinDetailScreenState extends State<PinDetailScreen> {
     try {
       if (_isLiked) {
         await _supabase.from('pin_likes').insert({'pin_id': pinId, 'user_id': userId});
+
+        // Notify the pin owner (skip if it's the owner themselves)
+        final pinOwnerId = widget.pin['user_id'] as String?;
+        if (pinOwnerId != null && pinOwnerId != userId) {
+          try {
+            final myProfile = await _supabase
+                .from('profiles')
+                .select('full_name, username')
+                .eq('id', userId)
+                .maybeSingle();
+            final myName = myProfile != null
+                ? (myProfile['full_name'] as String?) ?? (myProfile['username'] as String?) ?? 'Alguien'
+                : 'Alguien';
+            final pinTitle = (widget.pin['title'] as String?) ?? '';
+            await _supabase.from('notifications').insert({
+              'user_id': pinOwnerId,
+              'actor_id': userId,
+              'type': 'like',
+              'title': Translations.text(context, 'new_like_title'),
+              'message': Translations.text(context, 'new_like_message',
+                  {'actor': myName, 'title': pinTitle}),
+              'reference_id': pinId.toString(),
+              'is_read': false,
+              'created_at': DateTime.now().toUtc().toIso8601String(),
+            });
+          } catch (_) {} // Don't block the like if notification fails
+        }
       } else {
         await _supabase.from('pin_likes').delete().eq('pin_id', pinId).eq('user_id', userId);
       }

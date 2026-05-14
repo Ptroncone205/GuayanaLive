@@ -32,6 +32,7 @@ class PinterestScreenState extends State<PinterestScreen> {
   final FocusNode _searchFocusNode = FocusNode();
 
   bool _isSearching = false;
+  bool _hasUnreadNotifications = false;
   bool _isLoading = true;
 
   List<Map<String, dynamic>> _pins = [];
@@ -50,6 +51,7 @@ class PinterestScreenState extends State<PinterestScreen> {
     super.initState();
     _fetchExistingTags();
     fetchPins();
+    _checkUnreadNotifications();
     _searchController.addListener(() {
       _filterPins(_searchController.text);
     });
@@ -61,6 +63,28 @@ class PinterestScreenState extends State<PinterestScreen> {
     _searchFocusNode.dispose();
     _tagController.dispose();
     super.dispose();
+  }
+
+  Future<void> _checkUnreadNotifications() async {
+    final user = _supabase.auth.currentUser;
+    if (user == null) {
+      if (mounted && _hasUnreadNotifications) {
+        setState(() => _hasUnreadNotifications = false);
+      }
+      return;
+    }
+    try {
+      final res = await _supabase
+          .from('notifications')
+          .select('id')
+          .eq('user_id', user.id)
+          .eq('is_read', false)
+          .limit(1);
+      final unread = (res as List).isNotEmpty;
+      if (mounted && _hasUnreadNotifications != unread) {
+        setState(() => _hasUnreadNotifications = unread);
+      }
+    } catch (_) {}
   }
 
   Future<void> fetchPins() async {
@@ -134,7 +158,8 @@ class PinterestScreenState extends State<PinterestScreen> {
         );
       }
     } finally {
-      if (mounted) setState(() => _isLoading = false);
+      if (mounted) _checkUnreadNotifications();
+      setState(() => _isLoading = false);
     }
   }
 
@@ -291,6 +316,7 @@ class PinterestScreenState extends State<PinterestScreen> {
           'type': 'post',
           'title': 'Nueva publicación',
           'message': '$actorName publicó una nueva publicación.',
+          'reference_id': pinId.toString(),
           'is_read': false,
           'created_at': DateTime.now().toUtc().toIso8601String(),
         };
@@ -887,18 +913,19 @@ class PinterestScreenState extends State<PinterestScreen> {
               alignment: Alignment.center,
               children: [
                 const Icon(Icons.notifications_outlined),
-                Positioned(
-                  right: 0,
-                  top: 8,
-                  child: Container(
-                    width: 8,
-                    height: 8,
-                    decoration: BoxDecoration(
-                      color: Colors.red,
-                      shape: BoxShape.circle,
+                if (_hasUnreadNotifications)
+                  Positioned(
+                    right: 0,
+                    top: 8,
+                    child: Container(
+                      width: 8,
+                      height: 8,
+                      decoration: const BoxDecoration(
+                        color: Colors.red,
+                        shape: BoxShape.circle,
+                      ),
                     ),
                   ),
-                ),
               ],
             ),
             onPressed: () {
@@ -906,7 +933,7 @@ class PinterestScreenState extends State<PinterestScreen> {
                 MaterialPageRoute(
                   builder: (_) => const NotificationsScreen(),
                 ),
-              );
+              ).then((_) => _checkUnreadNotifications());
             },
             tooltip: 'Notificaciones',
           ),
