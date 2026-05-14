@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'pin_detail_screen.dart';
+import 'translations.dart';
 
 class PinCluster {
   final double latitude;
@@ -122,10 +123,10 @@ class _MapScreenState extends State<MapScreen> {
             position: LatLng(lat, lng),
             infoWindow: InfoWindow(
               title: isMultiple
-                  ? '${cluster.pins.length} avistamientos'
-                  : (cluster.pins.first['title']?.toString() ?? 'Especie'),
+                  ? '${cluster.pins.length} ${Translations.text(context, 'sightings')}'
+                  : (cluster.pins.first['title']?.toString() ?? Translations.text(context, 'species')),
               snippet:
-                  'Toca aquí para ver ${isMultiple ? "las publicaciones" : "la publicación"}',
+                  isMultiple ? Translations.text(context, 'tap_to_view_posts') : Translations.text(context, 'tap_to_view_post'),
               onTap: () => _showClusterBottomSheet(cluster.pins),
             ),
           ),
@@ -156,7 +157,7 @@ class _MapScreenState extends State<MapScreen> {
       if (mounted) {
         setState(() => _isLoading = false);
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Error al cargar marcadores')),
+          SnackBar(content: Text(Translations.text(context, 'error_loading_markers'))),
         );
       }
     }
@@ -198,7 +199,7 @@ class _MapScreenState extends State<MapScreen> {
                       ),
                     ),
                     Text(
-                      '${pins.length} Avistamientos en esta zona',
+                      '${pins.length} ${Translations.text(context, 'sightings_in_this_zone')}',
                       style: const TextStyle(
                         fontWeight: FontWeight.bold,
                         fontSize: 16,
@@ -250,7 +251,7 @@ class _MapScreenState extends State<MapScreen> {
                                       padding: const EdgeInsets.all(8),
                                       color: Colors.black54,
                                       child: Text(
-                                        pin['title'] ?? 'Sin título',
+                                        pin['title'] ?? Translations.text(context, 'untitled'),
                                         style: const TextStyle(
                                           color: Colors.white,
                                           fontSize: 12,
@@ -281,11 +282,11 @@ class _MapScreenState extends State<MapScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Mapa de Avistamientos'),
+        title: Text(Translations.text(context, 'sighting_map')),
         actions: [
           Row(
             children: [
-              const Text('Zonas de calor', style: TextStyle(fontSize: 12)),
+              Text(Translations.text(context, 'heat_zones'), style: const TextStyle(fontSize: 12)),
               Switch(
                 value: _showHeatmap,
                 activeColor: Colors.redAccent,
@@ -316,7 +317,7 @@ class _MapScreenState extends State<MapScreen> {
       floatingActionButton: FloatingActionButton(
         onPressed: _loadPinsFromSupabase,
         backgroundColor: Theme.of(context).primaryColor,
-        tooltip: 'Actualizar mapa',
+        tooltip: Translations.text(context, 'update_map'),
         child: const Icon(Icons.refresh, color: Colors.white),
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.startFloat,

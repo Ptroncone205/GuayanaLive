@@ -10,6 +10,7 @@ import 'profile_screen.dart';
 import 'camera_screen.dart';
 import 'auth_modal.dart';
 import 'map_screen.dart'; // Tu nueva pantalla de mapa
+import 'translations.dart';
 
 final GlobalKey<PinterestScreenState> pinterestKey =
     GlobalKey<PinterestScreenState>();
@@ -260,35 +261,35 @@ class _MainLayoutState extends State<MainLayout> {
           unselectedItemColor: Colors.white70,
           iconSize: 28,
           items: [
-            const BottomNavigationBarItem(
-              icon: Icon(Icons.home_outlined, color: Colors.white),
-              activeIcon: Icon(Icons.home, color: Colors.white),
-              label: 'Home Feed',
-            ),
-            const BottomNavigationBarItem(
-              icon: Icon(Icons.auto_awesome_outlined, color: Colors.white),
-              activeIcon: Icon(Icons.auto_awesome, color: Colors.white),
-              label: 'AI Chat',
-            ),
-            const BottomNavigationBarItem(
-              icon: Icon(Icons.add_box_outlined, color: Colors.white),
-              activeIcon: Icon(Icons.add_box, color: Colors.white),
-              label: 'Add New Post',
+            BottomNavigationBarItem(
+              icon: const Icon(Icons.home_outlined, color: Colors.white),
+              activeIcon: const Icon(Icons.home, color: Colors.white),
+              label: Translations.text(context, 'home_feed'),
             ),
             BottomNavigationBarItem(
-              icon: Icon(Icons.map_outlined, color: Colors.white),
-              activeIcon: Icon(Icons.map, color: Colors.white),
-              label: 'Map',
+              icon: const Icon(Icons.auto_awesome_outlined, color: Colors.white),
+              activeIcon: const Icon(Icons.auto_awesome, color: Colors.white),
+              label: Translations.text(context, 'ai_chat'),
             ),
-            const BottomNavigationBarItem(
-              icon: Icon(Icons.textsms_outlined, color: Colors.white),
-              activeIcon: Icon(Icons.textsms, color: Colors.white),
-              label: 'User Messages',
+            BottomNavigationBarItem(
+              icon: const Icon(Icons.add_box_outlined, color: Colors.white),
+              activeIcon: const Icon(Icons.add_box, color: Colors.white),
+              label: Translations.text(context, 'add_new_post'),
+            ),
+            BottomNavigationBarItem(
+              icon: const Icon(Icons.map_outlined, color: Colors.white),
+              activeIcon: const Icon(Icons.map, color: Colors.white),
+              label: Translations.text(context, 'map'),
+            ),
+            BottomNavigationBarItem(
+              icon: const Icon(Icons.textsms_outlined, color: Colors.white),
+              activeIcon: const Icon(Icons.textsms, color: Colors.white),
+              label: Translations.text(context, 'user_messages'),
             ),
             BottomNavigationBarItem(
               icon: _buildProfileNavIcon(),
               activeIcon: _buildProfileNavIcon(isActive: true),
-              label: 'Profile',
+              label: Translations.text(context, 'profile_tab'),
             ),
           ],
         ),

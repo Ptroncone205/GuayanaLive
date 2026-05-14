@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'translations.dart';
 
 void showAuthModal(BuildContext context) {
   showModalBottomSheet(
@@ -60,7 +61,7 @@ class _AuthModalState extends State<AuthModal> {
     final password = _loginPasswordController.text.trim();
 
     if (identifier.isEmpty || password.isEmpty) {
-      _showError('Por favor, llena todos los campos');
+      _showError(Translations.text(context, 'fill_all_fields'));
       return;
     }
 
@@ -72,7 +73,7 @@ class _AuthModalState extends State<AuthModal> {
       if (!identifier.contains('@')) {
         final emailResult = await _supabase.rpc('get_email_by_username', params: {'p_username': identifier});
         if (emailResult == null) {
-          throw Exception('Usuario no encontrado');
+          throw Exception(Translations.text(context, 'user_not_found'));
         }
         loginEmail = emailResult as String;
       }
@@ -86,7 +87,7 @@ class _AuthModalState extends State<AuthModal> {
         Navigator.of(context).pop();
       }
     } on AuthException catch (error) {
-      _showError('Error de autenticación: ${error.message}');
+      _showError('${Translations.text(context, 'auth_error')}: ${error.message}');
     } catch (e) {
       _showError(e.toString().replaceAll('Exception: ', ''));
     } finally {
@@ -101,17 +102,17 @@ class _AuthModalState extends State<AuthModal> {
     final confirmPassword = _regConfirmPasswordController.text.trim();
 
     if (email.isEmpty || username.isEmpty || password.isEmpty || confirmPassword.isEmpty) {
-      _showError('Todos los campos son obligatorios');
+      _showError(Translations.text(context, 'fill_all_fields'));
       return;
     }
 
     if (password != confirmPassword) {
-      _showError('Las contraseñas no coinciden');
+      _showError(Translations.text(context, 'passwords_dont_match'));
       return;
     }
 
     if (password.length < 6) {
-      _showError('La contraseña debe tener al menos 6 caracteres');
+      _showError(Translations.text(context, 'password_length_error'));
       return;
     }
 
@@ -125,7 +126,7 @@ class _AuthModalState extends State<AuthModal> {
           .maybeSingle();
 
       if (existingUser != null) {
-        throw Exception('El nombre de usuario ya está en uso');
+        throw Exception(Translations.text(context, 'username_in_use'));
       }
 
       // 1. Perform the sign up
@@ -138,10 +139,10 @@ class _AuthModalState extends State<AuthModal> {
       // 2. Show the success message
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('¡Registro exitoso! Por favor, revisa tu correo electrónico para confirmar tu cuenta.'),
+          SnackBar(
+            content: Text(Translations.text(context, 'registration_success')),
             backgroundColor: Colors.green,
-            duration: Duration(seconds: 5), // Give them time to read it
+            duration: const Duration(seconds: 5), // Give them time to read it
           ),
         );
       }
@@ -179,20 +180,20 @@ class _AuthModalState extends State<AuthModal> {
       children: [
         TextField(
           controller: _identifierController,
-          decoration: const InputDecoration(
-            labelText: 'Correo electrónico o Usuario',
-            prefixIcon: Icon(Icons.person),
-            border: OutlineInputBorder(),
+          decoration: InputDecoration(
+            labelText: Translations.text(context, 'email_or_username'),
+            prefixIcon: const Icon(Icons.person),
+            border: const OutlineInputBorder(),
           ),
         ),
         const SizedBox(height: 16),
         TextField(
           controller: _loginPasswordController,
           obscureText: true,
-          decoration: const InputDecoration(
-            labelText: 'Contraseña',
-            prefixIcon: Icon(Icons.lock),
-            border: OutlineInputBorder(),
+          decoration: InputDecoration(
+            labelText: Translations.text(context, 'password'),
+            prefixIcon: const Icon(Icons.lock),
+            border: const OutlineInputBorder(),
           ),
         ),
       ],
@@ -205,39 +206,39 @@ class _AuthModalState extends State<AuthModal> {
         TextField(
           controller: _regEmailController,
           keyboardType: TextInputType.emailAddress,
-          decoration: const InputDecoration(
-            labelText: 'Correo electrónico',
-            prefixIcon: Icon(Icons.email),
-            border: OutlineInputBorder(),
+          decoration: InputDecoration(
+            labelText: Translations.text(context, 'email'),
+            prefixIcon: const Icon(Icons.email),
+            border: const OutlineInputBorder(),
           ),
         ),
         const SizedBox(height: 16),
         TextField(
           controller: _regUsernameController,
-          decoration: const InputDecoration(
-            labelText: 'Nombre de usuario',
-            prefixIcon: Icon(Icons.alternate_email),
-            border: OutlineInputBorder(),
+          decoration: InputDecoration(
+            labelText: Translations.text(context, 'username'),
+            prefixIcon: const Icon(Icons.alternate_email),
+            border: const OutlineInputBorder(),
           ),
         ),
         const SizedBox(height: 16),
         TextField(
           controller: _regPasswordController,
           obscureText: true,
-          decoration: const InputDecoration(
-            labelText: 'Contraseña',
-            prefixIcon: Icon(Icons.lock),
-            border: OutlineInputBorder(),
+          decoration: InputDecoration(
+            labelText: Translations.text(context, 'password'),
+            prefixIcon: const Icon(Icons.lock),
+            border: const OutlineInputBorder(),
           ),
         ),
         const SizedBox(height: 16),
         TextField(
           controller: _regConfirmPasswordController,
           obscureText: true,
-          decoration: const InputDecoration(
-            labelText: 'Confirmar contraseña',
-            prefixIcon: Icon(Icons.lock_outline),
-            border: OutlineInputBorder(),
+          decoration: InputDecoration(
+            labelText: Translations.text(context, 'confirm_password'),
+            prefixIcon: const Icon(Icons.lock_outline),
+            border: const OutlineInputBorder(),
           ),
         ),
       ],
@@ -280,7 +281,7 @@ class _AuthModalState extends State<AuthModal> {
             
           const SizedBox(height: 16),
           Text(
-            _isLogin ? 'Iniciar Sesión' : 'Crea tu cuenta',
+            _isLogin ? Translations.text(context, 'login_title') : Translations.text(context, 'create_account_title'),
             style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
             textAlign: TextAlign.center,
           ),
@@ -299,7 +300,7 @@ class _AuthModalState extends State<AuthModal> {
             onPressed: _isLoading ? null : (_isLogin ? _login : _register),
             child: _isLoading 
               ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-              : Text(_isLogin ? 'Entrar' : 'Registrarse', style: const TextStyle(fontSize: 16, color: Colors.white)),
+              : Text(_isLogin ? Translations.text(context, 'login_button') : Translations.text(context, 'register_button'), style: const TextStyle(fontSize: 16, color: Colors.white)),
           ),
           const SizedBox(height: 16),
           
@@ -308,7 +309,7 @@ class _AuthModalState extends State<AuthModal> {
               setState(() => _isLogin = !_isLogin);
             },
             child: Text(
-              _isLogin ? '¿No tienes cuenta? Regístrate' : '¿Ya tienes cuenta? Inicia sesión',
+              _isLogin ? Translations.text(context, 'no_account_prompt') : Translations.text(context, 'has_account_prompt'),
               style: TextStyle(color: primaryColor),
             ),
           ),

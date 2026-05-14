@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
+import 'locale_provider.dart';
 import 'main_layout.dart';
 import 'login_screen.dart';
 import 'profile_screen.dart';
@@ -17,7 +20,10 @@ void main() async {
     anonKey: 'sb_publishable_FXvexleGAbzKf-iwOU8fyw_xfA4DFhk',
   );
 
-  runApp(const MyApp());
+  final prefs = await SharedPreferences.getInstance();
+  final String languageCode = prefs.getString('language_code') ?? 'es';
+
+  runApp(LocaleProviderScope(notifier: LocaleProvider(Locale(languageCode)), child: const MyApp()));
 }
 
 class MyApp extends StatelessWidget {
@@ -26,10 +32,18 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     const Color appleGreen = Color(0xFF9ACF7C);
+    final localeProvider = LocaleProviderScope.of(context);
 
     return MaterialApp(
       title: 'Guayana Live',
       debugShowCheckedModeBanner: false,
+      locale: localeProvider.locale,
+      supportedLocales: const [Locale('es'), Locale('en')],
+      localizationsDelegates: const [
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: appleGreen),
         useMaterial3: true,

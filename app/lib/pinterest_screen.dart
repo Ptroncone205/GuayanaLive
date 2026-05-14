@@ -17,6 +17,7 @@ import 'notifications_screen.dart';
 import 'pin_detail_screen.dart';
 import 'auth_modal.dart';
 import 'services/groq_service.dart';
+import 'translations.dart';
 
 class PinterestScreen extends StatefulWidget {
   const PinterestScreen({super.key});
@@ -129,7 +130,7 @@ class PinterestScreenState extends State<PinterestScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error cargando publicaciones: $e')),
+          SnackBar(content: Text('${Translations.text(context, 'error_loading_posts')}: $e')),
         );
       }
     } finally {
@@ -151,23 +152,21 @@ class PinterestScreenState extends State<PinterestScreen> {
           context: context,
           barrierDismissible: false,
           builder: (ctx) => AlertDialog(
-            title: const Text('Ubicación de la especie'),
-            content: const Text(
-              'No pudimos detectar la ubicación en la foto. Para que este avistamiento se registre en el mapa de calor, necesitamos usar la ubicación actual de tu dispositivo. ¿Deseas permitirlo? (Si cancelas, se subirá sin ubicación).',
-            ),
+            title: Text(Translations.text(ctx, 'species_location')),
+            content: Text(Translations.text(ctx, 'location_prompt_text')),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(ctx, false),
-                child: const Text('No, subir sin ubicación'),
+                child: Text(Translations.text(ctx, 'upload_without_location')),
               ),
               ElevatedButton(
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Theme.of(ctx).primaryColor,
                 ),
                 onPressed: () => Navigator.pop(ctx, true),
-                child: const Text(
-                  'Sí, usar mi ubicación',
-                  style: TextStyle(color: Colors.white),
+                child: Text(
+                  Translations.text(ctx, 'yes_use_location'),
+                  style: const TextStyle(color: Colors.white),
                 ),
               ),
             ],
@@ -250,14 +249,14 @@ class PinterestScreenState extends State<PinterestScreen> {
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Publicación subida con éxito!')),
+          SnackBar(content: Text(Translations.text(context, 'post_success'))),
         );
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text('Error al subir: $e')));
+        ).showSnackBar(SnackBar(content: Text('${Translations.text(context, 'error_uploading')}: $e')));
       }
     }
   }
@@ -546,7 +545,7 @@ class PinterestScreenState extends State<PinterestScreen> {
                       .toList();
 
             return AlertDialog(
-              title: const Text('Nueva publicación'),
+              title: Text(Translations.text(context, 'new_post')),
               content: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -580,7 +579,7 @@ class PinterestScreenState extends State<PinterestScreen> {
                   TextField(
                     controller: titleController,
                     decoration: InputDecoration(
-                      labelText: 'Título de la imagen',
+                      labelText: Translations.text(context, 'image_title'),
                       border: const OutlineInputBorder(),
                       suffixIcon: IconButton(
                         icon: isGeneratingAI
@@ -595,7 +594,7 @@ class PinterestScreenState extends State<PinterestScreen> {
                                 Icons.auto_awesome,
                                 color: Colors.purple,
                               ),
-                        tooltip: 'Autocompletar con IA',
+                        tooltip: Translations.text(context, 'autocomplete_ai'),
                         onPressed: isGeneratingAI || isUploading
                             ? null
                             : () async {
@@ -616,7 +615,7 @@ class PinterestScreenState extends State<PinterestScreen> {
                     controller: _tagController,
                     decoration: InputDecoration(
                       labelText: 'Tags',
-                      hintText: 'ej. viaje, naturaleza',
+                      hintText: Translations.text(context, 'tags_hint'),
                       border: const OutlineInputBorder(),
                       suffixIcon: IconButton(
                         icon: const Icon(Icons.add),
@@ -684,7 +683,7 @@ class PinterestScreenState extends State<PinterestScreen> {
                   onPressed: isUploading || isGeneratingAI
                       ? null
                       : () => Navigator.pop(context),
-                  child: const Text('Cancelar'),
+                  child: Text(Translations.text(context, 'cancel')),
                 ),
                 ElevatedButton(
                   style: ElevatedButton.styleFrom(
@@ -695,8 +694,8 @@ class PinterestScreenState extends State<PinterestScreen> {
                       : () async {
                           if (titleController.text.trim().isEmpty) {
                             ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('Por favor ingresa un título'),
+                              SnackBar(
+                                content: Text(Translations.text(context, 'please_enter_title')),
                               ),
                             );
                             return;
@@ -719,9 +718,9 @@ class PinterestScreenState extends State<PinterestScreen> {
                             strokeWidth: 2,
                           ),
                         )
-                      : const Text(
-                          'Subir',
-                          style: TextStyle(color: Colors.white),
+                      : Text(
+                          Translations.text(context, 'upload'),
+                          style: const TextStyle(color: Colors.white),
                         ),
                 ),
               ],
@@ -749,13 +748,13 @@ class PinterestScreenState extends State<PinterestScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const ListTile(
-                title: Text('Añadir publicación'),
-                subtitle: Text('Selecciona cámara o galería'),
+              ListTile(
+                title: Text(Translations.text(context, 'add_new_post')),
+                subtitle: Text(Translations.text(context, 'select_camera_or_gallery')),
               ),
               ListTile(
                 leading: const Icon(Icons.camera_alt),
-                title: const Text('Tomar foto'),
+                title: Text(Translations.text(context, 'take_photo')),
                 onTap: () async {
                   Navigator.of(sheetContext).pop();
                   await _openCameraScreen();
@@ -763,7 +762,7 @@ class PinterestScreenState extends State<PinterestScreen> {
               ),
               ListTile(
                 leading: const Icon(Icons.photo_library),
-                title: const Text('Elegir desde dispositivo'),
+                title: Text(Translations.text(context, 'choose_from_device')),
                 onTap: () async {
                   Navigator.of(sheetContext).pop();
                   await _pickImage(ImageSource.gallery);
@@ -793,7 +792,7 @@ class PinterestScreenState extends State<PinterestScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error al seleccionar imagen: $e')),
+        SnackBar(content: Text('${Translations.text(context, 'error_selecting_image')}: $e')),
       );
     }
   }

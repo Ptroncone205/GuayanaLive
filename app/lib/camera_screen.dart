@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:camera/camera.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'translations.dart';
 
 /// Result returned when the user takes a photo and chooses an action.
 class CameraResult {
@@ -61,7 +62,7 @@ class _CameraScreenState extends State<CameraScreen>
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error al inicializar la cámara: $e')),
+          SnackBar(content: Text('${Translations.text(context, 'camera_init_error')}: $e')),
         );
         Navigator.of(context).pop();
       }
@@ -88,7 +89,7 @@ class _CameraScreenState extends State<CameraScreen>
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error al tomar la foto: $e')),
+          SnackBar(content: Text('${Translations.text(context, 'camera_take_error')}: $e')),
         );
       }
     }
@@ -180,9 +181,9 @@ class _CameraScreenState extends State<CameraScreen>
                                   icon: Icons.close,
                                   onTap: () => Navigator.of(context).pop(),
                                 ),
-                                const Text(
-                                  'Cámara',
-                                  style: TextStyle(
+                                Text(
+                                  Translations.text(context, 'camera'),
+                                  style: const TextStyle(
                                     color: Colors.white,
                                     fontSize: 18,
                                     fontWeight: FontWeight.w600,
@@ -322,7 +323,7 @@ class _ActionChoiceSheet extends StatelessWidget {
                 const SizedBox(height: 16),
 
                 Text(
-                  '¿Qué deseas hacer con esta foto?',
+                  Translations.text(context, 'what_to_do_with_photo'),
                   style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w700,
@@ -339,8 +340,8 @@ class _ActionChoiceSheet extends StatelessWidget {
                     Expanded(
                       child: _ChoiceButton(
                         icon: Icons.auto_awesome,
-                        label: 'Escanear con IA',
-                        subtitle: 'Info de la especie',
+                        label: Translations.text(context, 'scan_with_ai'),
+                        subtitle: Translations.text(context, 'species_info'),
                         color: const Color(0xFF7C3AED),
                         onTap: onScanAI,
                       ),
@@ -349,8 +350,8 @@ class _ActionChoiceSheet extends StatelessWidget {
                     Expanded(
                       child: _ChoiceButton(
                         icon: Icons.add_photo_alternate,
-                        label: 'Publicar',
-                        subtitle: 'Compartir en el feed',
+                        label: Translations.text(context, 'post'),
+                        subtitle: Translations.text(context, 'share_on_feed'),
                         color: primaryColor,
                         onTap: onPost,
                       ),
@@ -362,7 +363,7 @@ class _ActionChoiceSheet extends StatelessWidget {
                 TextButton.icon(
                   onPressed: onRetake,
                   icon: const Icon(Icons.refresh, size: 18),
-                  label: const Text('Volver a tomar'),
+                  label: Text(Translations.text(context, 'retake')),
                   style: TextButton.styleFrom(
                     foregroundColor: Colors.grey.shade500,
                     padding: const EdgeInsets.symmetric(vertical: 2),
