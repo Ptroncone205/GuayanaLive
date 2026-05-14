@@ -470,8 +470,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               // BOTONES DE ACCIÓN (Editar o Mensaje)
                               if (_isMyProfile)
                                 Row(
+                                  mainAxisSize: MainAxisSize.min,
                                   children: [
-                                    Expanded(
+                                    SizedBox(
+                                      height: 44,
                                       child: ElevatedButton(
                                         onPressed: isGuest 
                                             ? () => showAuthModal(context) 
@@ -490,6 +492,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                     if (!isGuest && !_isEditing && !_isSetupMode)
                                       SizedBox(
                                         height: 44,
+                                        width: 44,
                                         child: OutlinedButton(
                                           onPressed: () {
                                             Navigator.of(context).push(
@@ -499,23 +502,28 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                             );
                                           },
                                           style: OutlinedButton.styleFrom(
+                                            foregroundColor: primaryColor,
                                             side: BorderSide(color: Colors.white.withOpacity(0.7)),
                                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
                                           ),
-                                          child: const Icon(Icons.settings, color: Colors.white),
+                                          child: Icon(Icons.settings, color: primaryColor),
                                         ),
                                       ),
                                   ],
                                 )
                               else if (!isGuest)
                                 Row(
+                                  mainAxisSize: MainAxisSize.min,
                                   children: [
-                                    Expanded(
+                                    SizedBox(
+                                      height: 44,
                                       child: ElevatedButton.icon(
                                         onPressed: _startChatWithUser,
                                         icon: const Icon(Icons.chat_bubble_outline, size: 18),
                                         label: const Text('Enviar Mensaje'),
                                         style: ElevatedButton.styleFrom(
+                                          minimumSize: const Size(0, 44),
+                                          padding: const EdgeInsets.symmetric(horizontal: 16),
                                           backgroundColor: Colors.green.shade700,
                                           foregroundColor: Colors.white,
                                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
@@ -531,6 +539,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                       ),
                                       label: Text(_isFollowing ? 'Siguiendo' : 'Seguir'),
                                       style: OutlinedButton.styleFrom(
+                                        minimumSize: const Size(0, 44),
+                                        padding: const EdgeInsets.symmetric(horizontal: 16),
                                         foregroundColor: _isFollowing ? Colors.green.shade700 : Colors.white,
                                         backgroundColor: _isFollowing ? Colors.white : Colors.green.shade700,
                                         side: BorderSide(

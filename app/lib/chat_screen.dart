@@ -687,6 +687,32 @@ class ChatScreenState extends State<ChatScreen> {
     return Scaffold(
       body: Column(
         children: [
+          Container(
+            width: double.infinity,
+            color: Colors.green.shade50,
+            padding: const EdgeInsets.symmetric(vertical: 16.0, horizontal: 16.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: const [
+                Text(
+                  'Asistente Virtual',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.black87,
+                  ),
+                ),
+                SizedBox(height: 6),
+                Text(
+                  'Haz tus preguntas o adjunta un archivo para recibir ayuda de Florencia.',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Colors.black54,
+                  ),
+                ),
+              ],
+            ),
+          ),
           Expanded(
             child: ListView.builder(
               controller: _scrollController,
