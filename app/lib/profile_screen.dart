@@ -198,6 +198,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
           'followee_id': _targetUserId,
           'created_at': DateTime.now().toUtc().toIso8601String(),
         });
+
+        final myProfileRes = await _supabase
+            .from('profiles')
+            .select('full_name, username')
+            .eq('id', currentUser.id)
+            .maybeSingle();
+        final myName = myProfileRes != null
+            ? (myProfileRes['full_name'] as String?) ?? (myProfileRes['username'] as String?) ?? Translations.text(context, 'user')
+            : Translations.text(context, 'user');
+
         await _supabase.from('notifications').insert({
           'user_id': _targetUserId,
           'actor_id': currentUser.id,
@@ -206,7 +216,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           'message': Translations.text(
             context,
             'new_follower_message',
-            {'follower': _nameController.text.isNotEmpty ? _nameController.text : Translations.text(context, 'user')},
+            {'follower': myName},
           ),
           'is_read': false,
           'created_at': DateTime.now().toUtc().toIso8601String(),

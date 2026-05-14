@@ -137,6 +137,31 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     });
   }
 
+  Future<void> _deleteNotification(NotificationEntry notification) async {
+    final prevIndex = _notifications.indexOf(notification);
+    setState(() {
+      _notifications.remove(notification);
+    });
+
+    try {
+      await _supabase.from('notifications').delete().eq('id', notification.id);
+    } catch (e) {
+      debugPrint('Error deleting notification: $e');
+      if (mounted) {
+        setState(() {
+          if (prevIndex >= 0 && prevIndex <= _notifications.length) {
+            _notifications.insert(prevIndex, notification);
+          } else {
+            _notifications.add(notification);
+          }
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(Translations.text(context, 'error_deleting_notification'))),
+        );
+      }
+    }
+  }
+
   IconData _iconForType(NotificationType type) {
     switch (type) {
       case NotificationType.message:
@@ -199,51 +224,64 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                   separatorBuilder: (context, index) => const Divider(height: 1),
                   itemBuilder: (context, index) {
                     final notification = _notifications[index];
-                    return ListTile(
-                      leading: CircleAvatar(
-                        radius: 20,
-                        backgroundColor:
-                            _iconColorForType(notification.type).withOpacity(0.16),
-                        child: Icon(
-                          _iconForType(notification.type),
-                          color: _iconColorForType(notification.type),
-                        ),
+                    return Dismissible(
+                      key: Key(notification.id),
+                      direction: DismissDirection.endToStart,
+                      background: Container(
+                        alignment: Alignment.centerRight,
+                        padding: const EdgeInsets.only(right: 20.0),
+                        color: Colors.red,
+                        child: const Icon(Icons.delete, color: Colors.white),
                       ),
-                      title: Text(notification.title),
-                      subtitle: Text(notification.subtitle),
-                      trailing: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Text(
-                            notification.time,
-                            style: const TextStyle(fontSize: 12),
-                          ),
-                          if (!notification.isRead)
-                            Container(
-                              margin: const EdgeInsets.only(top: 4),
-                              width: 8,
-                              height: 8,
-                              decoration: const BoxDecoration(
-                                color: Colors.red,
-                                shape: BoxShape.circle,
-                              ),
-                            ),
-                        ],
-                      ),
-                      tileColor: notification.isRead
-                          ? Colors.transparent
-                          : Theme.of(context).primaryColorLight.withOpacity(0.12),
-                      onTap: () async {
-                        if (!notification.isRead) {
-                          try {
-                            await _supabase
-                                .from('notifications')
-                                .update({'is_read': true})
-                                .eq('id', notification.id);
-                          } catch (_) {}
-                          setState(() => notification.isRead = true);
-                        }
+                      onDismissed: (direction) {
+                        _deleteNotification(notification);
                       },
+                      child: ListTile(
+                        leading: CircleAvatar(
+                          radius: 20,
+                          backgroundColor:
+                              _iconColorForType(notification.type).withOpacity(0.16),
+                          child: Icon(
+                            _iconForType(notification.type),
+                            color: _iconColorForType(notification.type),
+                          ),
+                        ),
+                        title: Text(notification.title),
+                        subtitle: Text(notification.subtitle),
+                        trailing: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text(
+                              notification.time,
+                              style: const TextStyle(fontSize: 12),
+                            ),
+                            if (!notification.isRead)
+                              Container(
+                                margin: const EdgeInsets.only(top: 4),
+                                width: 8,
+                                height: 8,
+                                decoration: const BoxDecoration(
+                                  color: Colors.red,
+                                  shape: BoxShape.circle,
+                                ),
+                              ),
+                          ],
+                        ),
+                        tileColor: notification.isRead
+                            ? Colors.transparent
+                            : Theme.of(context).primaryColorLight.withOpacity(0.12),
+                        onTap: () async {
+                          if (!notification.isRead) {
+                            try {
+                              await _supabase
+                                  .from('notifications')
+                                  .update({'is_read': true})
+                                  .eq('id', notification.id);
+                            } catch (_) {}
+                            setState(() => notification.isRead = true);
+                          }
+                        },
+                      ),
                     );
                   },
                 ),
