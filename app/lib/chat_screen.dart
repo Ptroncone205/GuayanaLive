@@ -1,15 +1,46 @@
 import 'dart:io';
 import 'dart:typed_data';
-import 'dart:convert';
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:image_picker/image_picker.dart';
+import 'package:mime/mime.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'camera_screen.dart';
 import 'services/groq_service.dart';
+import 'utils/video_preview_frames.dart';
 import 'auth_modal.dart'; // Importación añadida para mostrar el modal
+
+/// Adjunto listo para enviar a la IA (ruta local y/o bytes en web).
+class _PendingAttachment {
+  _PendingAttachment({
+    required this.mimeType,
+    this.path,
+    this.bytes,
+  }) : assert(path != null || bytes != null);
+
+  final String? path;
+  final Uint8List? bytes;
+  final String mimeType;
+
+  bool get isImage => mimeType.startsWith('image/');
+  bool get isVideo => mimeType.startsWith('video/');
+  bool get isAudio => mimeType.startsWith('audio/');
+
+  String get uiType {
+    if (isImage) return 'image';
+    if (isVideo) return 'video';
+    if (isAudio) return 'audio';
+    return 'text';
+  }
+
+  Future<Uint8List> readBytes() async {
+    if (bytes != null) return bytes!;
+    return XFile(path!).readAsBytes();
+  }
+}
 
 class ChatScreen extends StatefulWidget {
   /// If provided, this image will be pre-loaded as a pending attachment
@@ -26,13 +57,13 @@ class ChatMessage {
   final String sender;
   final String type;
   final String text;
-  final String? imagePath;
+  final String? attachmentPath;
 
   ChatMessage({
     required this.sender,
     required this.type,
     required this.text,
-    this.imagePath,
+    this.attachmentPath,
   });
 }
 
@@ -44,7 +75,7 @@ class ChatScreenState extends State<ChatScreen> {
   final GroqService _groqService = GroqService();
 
   bool _isLoading = false;
-  String? _pendingImagePath;
+  _PendingAttachment? _pendingAttachment;
   String? _userAvatarUrl;
 
   // --- VARIABLES ESTÁTICAS PARA LÍMITES DE INVITADO ---
@@ -57,7 +88,9 @@ class ChatScreenState extends State<ChatScreen> {
       sender: 'ia',
       type: 'text',
       text:
-          'Hola, soy la profesora Florencia, tu asistente IA de GuayanaLive. Puedes hacerme preguntas, o subir una imagen desde tu dispositivo para escanear alguna especie.',
+          'Hola, soy la profesora Florencia, tu asistente IA de GuayanaLive. Puedes hacerme preguntas, o adjuntar una imagen, un video o un audio. '
+          'En video se envían fotogramas del clip (en el navegador y en el móvil) y, si el archivo no es demasiado grande, también el audio transcrito. '
+          '(Los invitados solo pueden analizar una imagen.)',
     ),
   ];
 
@@ -65,9 +98,12 @@ class ChatScreenState extends State<ChatScreen> {
   void initState() {
     super.initState();
     _loadUserAvatar();
-    // Pre-load an image from the camera flow without auto-sending
     if (widget.initialImagePath != null) {
-      _pendingImagePath = widget.initialImagePath;
+      final p = widget.initialImagePath!;
+      _pendingAttachment = _PendingAttachment(
+        path: p,
+        mimeType: lookupMimeType(p) ?? 'image/jpeg',
+      );
     }
   }
 
@@ -80,7 +116,10 @@ class ChatScreenState extends State<ChatScreen> {
 
   void setPendingImage(String path) {
     setState(() {
-      _pendingImagePath = path;
+      _pendingAttachment = _PendingAttachment(
+        path: path,
+        mimeType: lookupMimeType(path) ?? 'image/jpeg',
+      );
     });
   }
 
@@ -122,54 +161,63 @@ class ChatScreenState extends State<ChatScreen> {
     );
   }
 
-  void _removePendingImage() {
+  void _removePendingAttachment() {
     setState(() {
-      _pendingImagePath = null;
+      _pendingAttachment = null;
     });
+  }
+
+  String _defaultPromptForPending(_PendingAttachment p) {
+    if (p.isImage) return 'Analiza esta imagen.';
+    if (p.isVideo) return 'Analiza este video.';
+    if (p.isAudio) return 'Analiza este audio.';
+    return 'Analiza este archivo.';
   }
 
   void _sendMessage() {
     final text = _messageController.text.trim();
-    if ((text.isEmpty && _pendingImagePath == null) || _isLoading) return;
+    if ((text.isEmpty && _pendingAttachment == null) || _isLoading) return;
 
-    // --- VERIFICACIÓN DE LÍMITES PARA INVITADOS ---
-    bool isGuest = _supabase.auth.currentUser == null;
+    final bool isGuest = _supabase.auth.currentUser == null;
     if (isGuest) {
-      if (_pendingImagePath != null) {
-        // Intenta analizar una imagen
+      if (_pendingAttachment != null) {
+        if (!_pendingAttachment!.isImage) {
+          showAuthModal(context);
+          return;
+        }
         if (_guestScanCount >= 1) {
           showAuthModal(context);
-          return; // Bloquea el envío
+          return;
         }
-        _guestScanCount++; // Consume su único intento
+        _guestScanCount++;
       } else {
-        // Intenta enviar mensaje de texto normal
         if (_guestTextCount >= 3) {
           showAuthModal(context);
-          return; // Bloquea el envío
+          return;
         }
-        _guestTextCount++; // Consume uno de sus 3 intentos
+        _guestTextCount++;
       }
     }
-    // ----------------------------------------------
 
-    final sendText = text.isNotEmpty ? text : 'Analiza esta imagen.';
+    final pending = _pendingAttachment;
+    final sendText = text.isNotEmpty
+        ? text
+        : (pending != null ? _defaultPromptForPending(pending) : text);
 
-    if (_pendingImagePath != null) {
-      final imagePath = _pendingImagePath!;
+    if (pending != null) {
       setState(() {
-        _pendingImagePath = null;
+        _pendingAttachment = null;
       });
       _messageController.clear();
       _addMessage(
         ChatMessage(
           sender: 'user',
-          type: 'image',
+          type: pending.uiType,
           text: sendText,
-          imagePath: imagePath,
+          attachmentPath: pending.path,
         ),
       );
-      _sendAIResponse(sendText, imagePath: imagePath);
+      _sendAIResponse(sendText, pending: pending);
     } else {
       _messageController.clear();
       _addMessage(ChatMessage(sender: 'user', type: 'text', text: sendText));
@@ -177,7 +225,10 @@ class ChatScreenState extends State<ChatScreen> {
     }
   }
 
-  Future<void> _sendAIResponse(String userText, {String? imagePath}) async {
+  Future<void> _sendAIResponse(
+    String userText, {
+    _PendingAttachment? pending,
+  }) async {
     setState(() {
       _isLoading = true;
     });
@@ -187,11 +238,50 @@ class ChatScreenState extends State<ChatScreen> {
     );
 
     try {
-      Uint8List? imageBytes;
+      Uint8List? mediaBytes;
+      String? mediaMime;
+      List<Uint8List> videoFrames = const [];
 
-      if (imagePath != null) {
-        imageBytes = await XFile(imagePath).readAsBytes();
+      if (pending != null) {
+        mediaBytes = await pending.readBytes();
+        mediaMime = pending.mimeType;
+        if (pending.isVideo) {
+          videoFrames = await VideoPreviewFrames.extractForAttachment(
+            path: pending.path,
+            bytes: pending.bytes,
+            mimeType: pending.mimeType,
+          );
+        }
       }
+
+      Uint8List? uploadBytes = mediaBytes;
+      if (pending != null &&
+          pending.isVideo &&
+          mediaBytes != null &&
+          mediaBytes.length > GroqService.maxVideoBytesForWhisper) {
+        if (videoFrames.length >= 2) {
+          uploadBytes = null;
+        } else {
+          if (!mounted) return;
+          setState(() {
+            final lastIndex = _messages.lastIndexWhere(
+              (m) => m.sender == 'ia' && m.text == 'Escribiendo...',
+            );
+            if (lastIndex != -1) {
+              _messages[lastIndex] = ChatMessage(
+                sender: 'ia',
+                type: 'text',
+                text:
+                    'Este video es demasiado grande y no se pudieron extraer fotogramas '
+                    'en este dispositivo. Prueba con un clip más corto (menos de ~2 MB) '
+                    'o envía una foto de la especie.',
+              );
+            }
+          });
+          return;
+        }
+      }
+
       final history = _messages
           .where((m) => m.text != 'Escribiendo...')
           .map(
@@ -201,10 +291,12 @@ class ChatScreenState extends State<ChatScreen> {
             },
           )
           .toList();
-      // --- LLAMADA AL SERVICIO DE GROQ ---
       final aiReply = await _groqService.getChatResponse(
         userText,
-        imageBytes: imageBytes,
+        mediaBytes: uploadBytes,
+        mediaMimeType: mediaMime,
+        mediaKind: pending?.uiType,
+        videoPreviewJpegFrames: videoFrames.isEmpty ? null : videoFrames,
         history: history,
       );
 
@@ -253,6 +345,8 @@ class ChatScreenState extends State<ChatScreen> {
   }
 
   Future<void> _showAttachmentOptions() async {
+    final bool isGuest = _supabase.auth.currentUser == null;
+
     return showModalBottomSheet<void>(
       context: context,
       shape: const RoundedRectangleBorder(
@@ -263,18 +357,40 @@ class ChatScreenState extends State<ChatScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const ListTile(
-                title: Text('Adjuntar archivo'),
-                subtitle: Text('Selecciona una imagen o abre la cámara'),
+              ListTile(
+                title: const Text('Adjuntar archivo'),
+                subtitle: Text(
+                  isGuest
+                      ? 'Como invitado solo puedes analizar una imagen (galería o cámara).'
+                      : 'Imagen, video o audio',
+                ),
               ),
               ListTile(
                 leading: const Icon(Icons.photo_library, color: Colors.green),
-                title: const Text('Elegir desde dispositivo'),
+                title: const Text('Elegir imagen'),
                 onTap: () async {
                   Navigator.of(sheetContext).pop();
                   await _pickImage(ImageSource.gallery);
                 },
               ),
+              if (!isGuest) ...[
+                ListTile(
+                  leading: const Icon(Icons.video_library, color: Colors.green),
+                  title: const Text('Elegir video'),
+                  onTap: () async {
+                    Navigator.of(sheetContext).pop();
+                    await _pickVideo();
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.audio_file, color: Colors.green),
+                  title: const Text('Elegir audio'),
+                  onTap: () async {
+                    Navigator.of(sheetContext).pop();
+                    await _pickAudio();
+                  },
+                ),
+              ],
               ListTile(
                 leading: const Icon(Icons.qr_code_scanner, color: Colors.green),
                 title: const Text('Abrir cámara'),
@@ -303,8 +419,9 @@ class ChatScreenState extends State<ChatScreen> {
         );
         return;
       }
+      final mime = lookupMimeType(pickedFile.path) ?? 'image/jpeg';
       setState(() {
-        _pendingImagePath = pickedFile.path;
+        _pendingAttachment = _PendingAttachment(path: pickedFile.path, mimeType: mime);
       });
     } catch (e) {
       if (!mounted) return;
@@ -314,14 +431,149 @@ class ChatScreenState extends State<ChatScreen> {
     }
   }
 
+  Future<void> _pickVideo() async {
+    try {
+      final XFile? picked = await _picker.pickVideo(source: ImageSource.gallery);
+      if (!mounted) return;
+      if (picked == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No se seleccionó ningún video.')),
+        );
+        return;
+      }
+      final mime = lookupMimeType(picked.path) ?? 'video/mp4';
+      setState(() {
+        _pendingAttachment = _PendingAttachment(path: picked.path, mimeType: mime);
+      });
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error al seleccionar video: $e')),
+      );
+    }
+  }
+
+  String _mimeFromAudioExtension(String? ext) {
+    switch (ext?.toLowerCase()) {
+      case 'mp3':
+        return 'audio/mpeg';
+      case 'm4a':
+      case 'mp4':
+        return 'audio/mp4';
+      case 'wav':
+        return 'audio/wav';
+      case 'ogg':
+        return 'audio/ogg';
+      case 'webm':
+        return 'audio/webm';
+      case 'flac':
+        return 'audio/flac';
+      case 'aac':
+        return 'audio/aac';
+      default:
+        return 'audio/mpeg';
+    }
+  }
+
+  Future<void> _pickAudio() async {
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: [
+          'mp3',
+          'm4a',
+          'wav',
+          'ogg',
+          'webm',
+          'flac',
+          'mpeg',
+          'mpga',
+          'aac',
+        ],
+        allowMultiple: false,
+        withData: kIsWeb,
+      );
+      if (!mounted) return;
+      if (result == null || result.files.isEmpty) return;
+      final f = result.files.first;
+      if (f.path != null && f.path!.isNotEmpty) {
+        final mime = lookupMimeType(f.path!) ?? _mimeFromAudioExtension(f.extension);
+        setState(() {
+          _pendingAttachment = _PendingAttachment(path: f.path, mimeType: mime);
+        });
+      } else if (f.bytes != null) {
+        final mime = _mimeFromAudioExtension(f.extension);
+        setState(() {
+          _pendingAttachment = _PendingAttachment(bytes: f.bytes, mimeType: mime);
+        });
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error al seleccionar audio: $e')),
+      );
+    }
+  }
+
   Future<void> _openCamera() async {
     final result = await Navigator.of(context).push<CameraResult>(
       MaterialPageRoute(builder: (context) => const CameraScreen()),
     );
     if (result == null || !mounted) return;
+    final mime = lookupMimeType(result.imagePath) ?? 'image/jpeg';
     setState(() {
-      _pendingImagePath = result.imagePath;
+      _pendingAttachment = _PendingAttachment(
+        path: result.imagePath,
+        mimeType: mime,
+      );
     });
+  }
+
+  Widget _mediaAttachmentPreview(ChatMessage message, Color textColor) {
+    switch (message.type) {
+      case 'image':
+        if (message.attachmentPath == null) {
+          return const SizedBox.shrink();
+        }
+        return ClipRRect(
+          borderRadius: BorderRadius.circular(12.0),
+          child: kIsWeb
+              ? Image.network(message.attachmentPath!, fit: BoxFit.cover)
+              : Image.file(File(message.attachmentPath!), fit: BoxFit.cover),
+        );
+      case 'video':
+        return Row(
+          children: [
+            Icon(Icons.videocam, color: textColor, size: 40),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                message.attachmentPath != null && !kIsWeb
+                    ? message.attachmentPath!.split(Platform.pathSeparator).last
+                    : 'Video adjunto',
+                style: TextStyle(color: textColor, fontSize: 13),
+              ),
+            ),
+          ],
+        );
+      case 'audio':
+        return Row(
+          children: [
+            Icon(Icons.audiotrack, color: textColor, size: 40),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                message.attachmentPath != null && !kIsWeb
+                    ? message.attachmentPath!.split(Platform.pathSeparator).last
+                    : 'Audio adjunto',
+                style: TextStyle(color: textColor, fontSize: 13),
+              ),
+            ),
+          ],
+        );
+      default:
+        return const SizedBox.shrink();
+    }
   }
 
   Widget _buildMessage(ChatMessage message) {
@@ -344,6 +596,11 @@ class ChatScreenState extends State<ChatScreen> {
           : null,
     );
 
+    final bool hasMedia =
+        message.type == 'image' ||
+        message.type == 'video' ||
+        message.type == 'audio';
+
     final bubble = Container(
       constraints: BoxConstraints(
         maxWidth: MediaQuery.of(context).size.width * 0.7,
@@ -353,22 +610,12 @@ class ChatScreenState extends State<ChatScreen> {
         borderRadius: BorderRadius.circular(16.0),
       ),
       padding: const EdgeInsets.all(12.0),
-      child: message.type == 'image'
+      child: hasMedia
           ? Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                if (message.imagePath != null) ...[
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(12.0),
-                    child: kIsWeb
-                        ? Image.network(message.imagePath!, fit: BoxFit.cover)
-                        : Image.file(
-                            File(message.imagePath!),
-                            fit: BoxFit.cover,
-                          ),
-                  ),
-                  const SizedBox(height: 8),
-                ],
+                _mediaAttachmentPreview(message, textColor),
+                const SizedBox(height: 8),
                 Text(message.text, style: TextStyle(color: textColor)),
               ],
             )
@@ -391,6 +638,49 @@ class ChatScreenState extends State<ChatScreen> {
     );
   }
 
+  Widget _pendingPreviewRow() {
+    final p = _pendingAttachment!;
+    Widget thumb;
+    String label;
+    if (p.isImage && p.path != null) {
+      thumb = ClipRRect(
+        borderRadius: BorderRadius.circular(12.0),
+        child: kIsWeb
+            ? Image.network(p.path!, width: 64, height: 64, fit: BoxFit.cover)
+            : Image.file(
+                File(p.path!),
+                width: 64,
+                height: 64,
+                fit: BoxFit.cover,
+              ),
+      );
+      label =
+          'Imagen seleccionada. Escribe un mensaje para enviarla junto con la solicitud.';
+    } else if (p.isVideo) {
+      thumb = const Icon(Icons.videocam, size: 48, color: Colors.green);
+      label =
+          'Video seleccionado. Escribe un mensaje (opcional); si no, se analizará el audio del clip.';
+    } else {
+      thumb = const Icon(Icons.audiotrack, size: 48, color: Colors.green);
+      label =
+          'Audio seleccionado. Escribe un mensaje (opcional); si no, se transcribirá y analizará.';
+    }
+
+    return Row(
+      children: [
+        SizedBox(width: 64, height: 64, child: Center(child: thumb)),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Text(label, style: const TextStyle(fontSize: 14)),
+        ),
+        IconButton(
+          icon: const Icon(Icons.close, color: Colors.green),
+          onPressed: _removePendingAttachment,
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -409,44 +699,14 @@ class ChatScreenState extends State<ChatScreen> {
               },
             ),
           ),
-          if (_pendingImagePath != null)
+          if (_pendingAttachment != null)
             Container(
               color: Colors.grey.shade100,
               padding: const EdgeInsets.symmetric(
                 horizontal: 12.0,
                 vertical: 10.0,
               ),
-              child: Row(
-                children: [
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(12.0),
-                    child: kIsWeb
-                        ? Image.network(
-                            _pendingImagePath!,
-                            width: 64,
-                            height: 64,
-                            fit: BoxFit.cover,
-                          )
-                        : Image.file(
-                            File(_pendingImagePath!),
-                            width: 64,
-                            height: 64,
-                            fit: BoxFit.cover,
-                          ),
-                  ),
-                  const SizedBox(width: 12),
-                  const Expanded(
-                    child: Text(
-                      'Imagen seleccionada. Escribe un mensaje para enviarla junto con la solicitud.',
-                      style: TextStyle(fontSize: 14),
-                    ),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.close, color: Colors.green),
-                    onPressed: _removePendingImage,
-                  ),
-                ],
-              ),
+              child: _pendingPreviewRow(),
             ),
           if (_isLoading)
             const LinearProgressIndicator(

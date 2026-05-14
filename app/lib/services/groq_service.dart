@@ -1,10 +1,15 @@
 import 'dart:convert';
-import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class GroqService {
+  /// Límite aproximado del cuerpo JSON en Edge Functions; el base64 crece ~33%.
+  static const int maxMediaBytes = 4 * 1024 * 1024;
+
+  /// Por encima de esto, con fotogramas extra, el JSON suele superar el límite de la función: no enviamos el binario del video (solo fotogramas + transcripción vacía guiada).
+  static const int maxVideoBytesForWhisper = 2 * 1024 * 1024;
+
   // Conversación persistente actual
   final List<Map<String, dynamic>> _chatHistory = [];
 
@@ -13,20 +18,64 @@ class GroqService {
     _chatHistory.clear();
   }
 
+  /// [mediaMimeType] es obligatorio si envías bytes que no sean JPEG legacy
+  /// (por ejemplo `image/png`, `video/mp4`, `audio/mpeg`).
+  ///
+  /// [mediaKind] refuerza el tipo en el servidor (`image` | `video` | `audio`) por si el
+  /// MIME viene vacío o como `application/octet-stream`.
+  ///
+  /// [videoPreviewJpegFrames]: fotogramas JPEG del mismo video (visión); imprescindible para
+  /// preguntas como "¿qué especie es?" cuando el audio no describe la escena.
   Future<String> getChatResponse(
     String userMessage, {
     Uint8List? imageBytes,
+    Uint8List? mediaBytes,
+    String? mediaMimeType,
+    String? mediaKind,
+    List<Uint8List>? videoPreviewJpegFrames,
     List<Map<String, dynamic>> history = const [],
   }) async {
     final userPrompt =
-        userMessage.isNotEmpty ? userMessage : 'Analiza esta imagen.';
+        userMessage.isNotEmpty ? userMessage : 'Analiza este archivo.';
+
+    final bytes = mediaBytes ?? imageBytes;
+    String? mime = mediaMimeType?.trim().toLowerCase();
+    if (bytes != null && bytes.isNotEmpty) {
+      if (mime == null || mime.isEmpty) {
+        mime = 'image/jpeg';
+      }
+    } else {
+      if (videoPreviewJpegFrames != null &&
+          videoPreviewJpegFrames.isNotEmpty) {
+        if (mime == null || mime.isEmpty) {
+          mime = 'video/mp4';
+        }
+      } else {
+        mime = null;
+      }
+    }
+
+    if (bytes != null && bytes.length > maxMediaBytes) {
+      return 'El archivo pesa demasiado para enviarlo a la IA desde la app (máximo '
+          'aproximadamente ${maxMediaBytes ~/ (1024 * 1024)} MB). Prueba con un '
+          'video o audio más corto o de menor calidad.';
+    }
+
+    if (videoPreviewJpegFrames != null) {
+      var frameBytes = 0;
+      for (final f in videoPreviewJpegFrames) {
+        frameBytes += f.length;
+      }
+      if (frameBytes > 2 * 1024 * 1024) {
+        return 'Los fotogramas del video son demasiado grandes. Prueba con otra '
+            'resolución o un clip más corto.';
+      }
+    }
 
     try {
-      String? imageBase64;
-
-      // Convertir imagen a base64 si existe
-      if (imageBytes != null && imageBytes.isNotEmpty) {
-        imageBase64 = base64Encode(imageBytes);
+      String? mediaBase64;
+      if (bytes != null && bytes.isNotEmpty) {
+        mediaBase64 = base64Encode(bytes);
       }
 
       // Guardar mensaje del usuario en memoria
@@ -35,14 +84,35 @@ class GroqService {
         'content': userPrompt,
       });
 
+      final previewB64 = videoPreviewJpegFrames
+          ?.where((e) => e.isNotEmpty)
+          .map(base64Encode)
+          .toList();
+
+      final body = <String, dynamic>{
+        'prompt': userPrompt,
+        'history': _chatHistory,
+        if (mediaBase64 != null) ...{
+          'mediaBase64': mediaBase64,
+          'mediaMimeType': mime,
+          if (mediaKind != null && mediaKind.trim().isNotEmpty)
+            'mediaKind': mediaKind.trim().toLowerCase(),
+        },
+      };
+      if (previewB64 != null && previewB64.isNotEmpty) {
+        body['videoPreviewFramesBase64'] = previewB64;
+        if (mediaBase64 == null &&
+            mediaKind != null &&
+            mediaKind.trim().toLowerCase() == 'video') {
+          body['mediaMimeType'] = mime ?? 'video/mp4';
+          body['mediaKind'] = 'video';
+        }
+      }
+
       // Llamar Edge Function
       final response = await Supabase.instance.client.functions.invoke(
         'ai_proxy',
-        body: {
-          'prompt': userPrompt,
-          'imageBase64': imageBase64,
-          'history': _chatHistory,
-        },
+        body: body,
       );
 
       final data = response.data;
@@ -84,7 +154,7 @@ class GroqService {
     }
   }
 
-  // AUTOFILL PARA POSTS
+  // AUTOFILL PARA POSTS (solo imagen)
   Future<Map<String, dynamic>> getAutoFillData(
     Uint8List imageBytes,
   ) async {
@@ -98,13 +168,15 @@ class GroqService {
 
     final aiResponse = await getChatResponse(
       prompt,
-      imageBytes: imageBytes,
+      mediaBytes: imageBytes,
+      mediaMimeType: 'image/jpeg',
+      mediaKind: 'image',
     );
 
     final cleanJson = aiResponse
         .replaceAll(RegExp(r'```json|```'), '')
         .trim();
 
-    return jsonDecode(cleanJson);
+    return jsonDecode(cleanJson) as Map<String, dynamic>;
   }
 }
