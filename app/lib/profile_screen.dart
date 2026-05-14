@@ -148,7 +148,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _fetchFollowInfo() async {
-    if (_supabase.auth.currentUser == null || _isMyProfile) return;
+    if (_supabase.auth.currentUser == null) return;
 
     try {
       final followRes = await _supabase.from('follows').select('id')

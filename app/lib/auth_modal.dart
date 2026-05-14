@@ -277,7 +277,7 @@ class _AuthModalState extends State<AuthModal> {
             ),
           
           if (!widget.isBottomSheet)
-            Icon(Icons.school, size: 64, color: primaryColor),
+            Icon(Icons.local_florist, size: 64, color: primaryColor),
             
           const SizedBox(height: 16),
           Text(
