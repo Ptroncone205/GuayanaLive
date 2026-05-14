@@ -13,13 +13,17 @@ class Translations {
       'blocked_users': 'Usuarios bloqueados',
       'blocked_users_subtitle': 'Ver usuarios bloqueados',
       'downloaded_photos': 'Fotos descargadas',
-      'downloaded_photos_subtitle': 'Solicitar fotos de publicaciones descargadas',
+      'downloaded_photos_subtitle':
+          'Solicitar fotos de publicaciones descargadas',
       'view_history': 'Historial visto',
       'view_history_subtitle': 'Historial de publicaciones vistas',
       'privacy': 'Privacidad',
       'privacy_subtitle': 'Privacidad',
       'help_request': 'Solicitar ayuda',
       'help_request_subtitle': 'Solicitar ayuda',
+      'help_tutorial_title': 'Cómo usar la aplicación',
+      'help_tutorial_text':
+          'Explora el feed para ver publicaciones, usa el chat para conversar, revisa las notificaciones y tu perfil para editar tus datos. Toca el ícono del mapa para ver ubicaciones cercanas y usa el botón de cámara para compartir contenido. Si necesitas ayuda adicional, regresa a esta pantalla.',
       'select_language': 'Selecciona el idioma',
       'spanish': 'Español',
       'english': 'Inglés',
@@ -40,7 +44,8 @@ class Translations {
       'send_message': 'Enviar Mensaje',
       'following': 'Siguiendo',
       'follow': 'Seguir',
-      'register_to_interact': 'Regístrate para interactuar con la comunidad, guardar tus especies favoritas y compartir tus propios descubrimientos.',
+      'register_to_interact':
+          'Regístrate para interactuar con la comunidad, guardar tus especies favoritas y compartir tus propios descubrimientos.',
       'name': 'Nombre',
       'username': 'Usuario',
       'biography': 'Biografía',
@@ -52,13 +57,15 @@ class Translations {
       'no_posts_yet': 'No has subido ninguna publicación.',
       'no_publications': 'Sin publicaciones.',
       'chat_between_users': 'Mensajes Privados',
-      'login_required_chat': 'Debes iniciar sesión para usar los mensajes privados.',
+      'login_required_chat':
+          'Debes iniciar sesión para usar los mensajes privados.',
       'unknown_user': 'Usuario desconocido',
       'chat_started': 'Chat iniciado',
       'conversations': 'Conversaciones',
       'contacts': 'Contactos',
       'no_conversations_yet': 'Aún no tienes conversaciones.',
-      'select_contact_to_start_chat': 'Selecciona un contacto para iniciar un chat.',
+      'select_contact_to_start_chat':
+          'Selecciona un contacto para iniciar un chat.',
       'no_contacts_yet': 'No tienes contactos aún.',
       'start_chat_with': 'Inicia una conversación con {name}',
       'no_messages_yet': 'No hay mensajes aún. Envía el primero a {name}.',
@@ -91,7 +98,8 @@ class Translations {
       'have_account_prompt': '¿Ya tienes cuenta? Inicia sesión',
       'passwords_must_match': 'Las contraseñas no coinciden',
       'password_min_length': 'La contraseña debe tener al menos 6 caracteres',
-      'registration_success': '¡Registro exitoso! Por favor, revisa tu correo electrónico para confirmar tu cuenta.',
+      'registration_success':
+          '¡Registro exitoso! Por favor, revisa tu correo electrónico para confirmar tu cuenta.',
       'home_feed': 'Inicio',
       'ai_chat': 'Chat IA',
       'add_new_post': 'Añadir publicación',
@@ -113,7 +121,8 @@ class Translations {
       'clear_filters': 'Borrar filtros',
       'no_posts_found': 'No se encontraron publicaciones.',
       'delete_comment': 'Eliminar comentario',
-      'delete_comment_confirm': '¿Estás seguro de que deseas eliminar este comentario?',
+      'delete_comment_confirm':
+          '¿Estás seguro de que deseas eliminar este comentario?',
       'delete': 'Eliminar',
       'delete_post': 'Eliminar publicación',
       'save': 'Guardar',
@@ -129,11 +138,14 @@ class Translations {
       'species': 'Especie',
       'untitled': 'Sin título',
       'mark_as_read': 'Marcar leídas',
-      'ai_welcome_message': 'Hola, soy la profesora Florencia, tu asistente IA de GuayanaLive. Puedes hacerme preguntas, o adjuntar una imagen, un video o un audio. En video se envían fotogramas del clip (en el navegador y en el móvil) y, si el archivo no es demasiado grande, también el audio transcrito. (Los invitados solo pueden analizar una imagen.)',
+      'ai_welcome_message':
+          'Hola, soy la profesora Florencia, tu asistente IA de GuayanaLive. Puedes hacerme preguntas, o adjuntar una imagen, un video o un audio. En video se envían fotogramas del clip (en el navegador y en el móvil) y, si el archivo no es demasiado grande, también el audio transcrito. (Los invitados solo pueden analizar una imagen.)',
       'typing': 'Escribiendo...',
-      'video_too_large': 'Este video es demasiado grande y no se pudieron extraer fotogramas en este dispositivo. Prueba con un clip más corto (menos de ~2 MB) o envía una foto de la especie.',
+      'video_too_large':
+          'Este video es demasiado grande y no se pudieron extraer fotogramas en este dispositivo. Prueba con un clip más corto (menos de ~2 MB) o envía una foto de la especie.',
       'error_connecting_ai': 'Error al conectar con la IA',
-      'guest_attachment_limit': 'Como invitado solo puedes analizar una imagen (galería o cámara).',
+      'guest_attachment_limit':
+          'Como invitado solo puedes analizar una imagen (galería o cámara).',
       'image_video_audio': 'Imagen, video o audio',
       'choose_video': 'Elegir video',
       'choose_audio': 'Elegir audio',
@@ -145,12 +157,17 @@ class Translations {
       'error_selecting_audio': 'Error al seleccionar audio',
       'attached_video': 'Video adjunto',
       'attached_audio': 'Audio adjunto',
-      'image_selected_prompt': 'Imagen seleccionada. Escribe un mensaje para enviarla junto con la solicitud.',
-      'video_selected_prompt': 'Video seleccionado. Escribe un mensaje (opcional); si no, se analizará el audio del clip.',
-      'audio_selected_prompt': 'Audio seleccionado. Escribe un mensaje (opcional); si no, se transcribirá y analizará.',
+      'image_selected_prompt':
+          'Imagen seleccionada. Escribe un mensaje para enviarla junto con la solicitud.',
+      'video_selected_prompt':
+          'Video seleccionado. Escribe un mensaje (opcional); si no, se analizará el audio del clip.',
+      'audio_selected_prompt':
+          'Audio seleccionado. Escribe un mensaje (opcional); si no, se transcribirá y analizará.',
       'virtual_assistant': 'Asistente Virtual',
-      'assistant_subtitle': 'Haz tus preguntas o adjunta un archivo para recibir ayuda de Florencia.',
-      'location_prompt_text': 'No pudimos detectar la ubicación en la foto. Para que este avistamiento se registre en el mapa de calor, necesitamos usar la ubicación actual de tu dispositivo. ¿Deseas permitirlo? (Si cancelas, se subirá sin ubicación).',
+      'assistant_subtitle':
+          'Haz tus preguntas o adjunta un archivo para recibir ayuda de Florencia.',
+      'location_prompt_text':
+          'No pudimos detectar la ubicación en la foto. Para que este avistamiento se registre en el mapa de calor, necesitamos usar la ubicación actual de tu dispositivo. ¿Deseas permitirlo? (Si cancelas, se subirá sin ubicación).',
       'yes_use_location': 'Sí, usar mi ubicación',
       'error_loading_posts': 'Error cargando publicaciones',
       'image_title': 'Título de la imagen',
@@ -167,7 +184,8 @@ class Translations {
       'error_saving_image': 'Error al guardar imagen',
       'comment_deleted': 'Comentario eliminado exitosamente',
       'error_deleting_comment': 'Error al eliminar comentario',
-      'delete_post_confirm': '¿Estás seguro de que deseas eliminar esta publicación?',
+      'delete_post_confirm':
+          '¿Estás seguro de que deseas eliminar esta publicación?',
       'post_deleted': 'Publicación eliminada exitosamente',
       'error_deleting_post': 'Error eliminando publicación',
       'error_updating_like': 'Error actualizando like',
@@ -188,10 +206,11 @@ class Translations {
       'post': 'Publicar',
       'share_on_feed': 'Compartir en el feed',
       'retake': 'Volver a tomar',
-      'followers_following_count': '{followers} seguidores • {following} siguiendo',
+      'followers_following_count':
+          '{followers} seguidores • {following} siguiendo',
       'continue_as_guest': 'Continuar como invitado',
       'user_made_new_post': '{name} hizo una nueva publicación.',
-      'feed_no_posts': 'No pudimos cargar ninguna publicación'
+      'feed_no_posts': 'No pudimos cargar ninguna publicación',
     },
     'en': {
       'settings': 'Settings',
@@ -209,6 +228,9 @@ class Translations {
       'privacy_subtitle': 'Privacy',
       'help_request': 'Request help',
       'help_request_subtitle': 'Request help',
+      'help_tutorial_title': 'How to use the app',
+      'help_tutorial_text':
+          'Browse the feed to see posts, use chat to talk with others, check notifications, and edit your profile. Tap the map icon to explore nearby locations and use the camera button to share content. If you need more help, return to this screen.',
       'select_language': 'Select language',
       'spanish': 'Spanish',
       'english': 'English',
@@ -229,7 +251,8 @@ class Translations {
       'send_message': 'Send Message',
       'following': 'Following',
       'follow': 'Follow',
-      'register_to_interact': 'Sign up to interact with the community, save your favorite species and share your own discoveries.',
+      'register_to_interact':
+          'Sign up to interact with the community, save your favorite species and share your own discoveries.',
       'name': 'Name',
       'username': 'Username',
       'biography': 'Biography',
@@ -277,7 +300,8 @@ class Translations {
       'have_account_prompt': 'Already have an account? Log in',
       'passwords_must_match': 'Passwords do not match',
       'password_min_length': 'Password must be at least 6 characters',
-      'registration_success': 'Registration successful! Please check your email to confirm your account.',
+      'registration_success':
+          'Registration successful! Please check your email to confirm your account.',
       'home_feed': 'Home',
       'ai_chat': 'AI Chat',
       'add_new_post': 'Add post',
@@ -315,11 +339,14 @@ class Translations {
       'species': 'Species',
       'untitled': 'Untitled',
       'mark_as_read': 'Mark as read',
-      'ai_welcome_message': 'Hi, I am Professor Florencia, your GuayanaLive AI assistant. You can ask me questions, or attach an image, video or audio. For videos, frames from the clip are sent and, if the file is not too large, the transcribed audio as well. (Guests can only analyze one image.)',
+      'ai_welcome_message':
+          'Hi, I am Professor Florencia, your GuayanaLive AI assistant. You can ask me questions, or attach an image, video or audio. For videos, frames from the clip are sent and, if the file is not too large, the transcribed audio as well. (Guests can only analyze one image.)',
       'typing': 'Typing...',
-      'video_too_large': 'This video is too large and frames could not be extracted on this device. Try a shorter clip (under ~2 MB) or send a photo of the species.',
+      'video_too_large':
+          'This video is too large and frames could not be extracted on this device. Try a shorter clip (under ~2 MB) or send a photo of the species.',
       'error_connecting_ai': 'Error connecting to AI',
-      'guest_attachment_limit': 'As a guest you can only analyze an image (gallery or camera).',
+      'guest_attachment_limit':
+          'As a guest you can only analyze an image (gallery or camera).',
       'image_video_audio': 'Image, video or audio',
       'choose_video': 'Choose video',
       'choose_audio': 'Choose audio',
@@ -331,12 +358,17 @@ class Translations {
       'error_selecting_audio': 'Error selecting audio',
       'attached_video': 'Attached video',
       'attached_audio': 'Attached audio',
-      'image_selected_prompt': 'Image selected. Write a message to send along with the request.',
-      'video_selected_prompt': 'Video selected. Write a message (optional); otherwise, the clip audio will be analyzed.',
-      'audio_selected_prompt': 'Audio selected. Write a message (optional); otherwise, it will be transcribed and analyzed.',
+      'image_selected_prompt':
+          'Image selected. Write a message to send along with the request.',
+      'video_selected_prompt':
+          'Video selected. Write a message (optional); otherwise, the clip audio will be analyzed.',
+      'audio_selected_prompt':
+          'Audio selected. Write a message (optional); otherwise, it will be transcribed and analyzed.',
       'virtual_assistant': 'Virtual Assistant',
-      'assistant_subtitle': 'Ask questions or attach a file to get help from Florencia.',
-      'location_prompt_text': 'We could not detect the location in the photo. For this sighting to be registered on the heat map, we need to use your device\'s current location. Do you wish to allow this? (If you cancel, it will be uploaded without a location).',
+      'assistant_subtitle':
+          'Ask questions or attach a file to get help from Florencia.',
+      'location_prompt_text':
+          'We could not detect the location in the photo. For this sighting to be registered on the heat map, we need to use your device\'s current location. Do you wish to allow this? (If you cancel, it will be uploaded without a location).',
       'yes_use_location': 'Yes, use my location',
       'error_loading_posts': 'Error loading posts',
       'image_title': 'Image title',
@@ -374,17 +406,25 @@ class Translations {
       'post': 'Post',
       'share_on_feed': 'Share on feed',
       'retake': 'Retake',
-      'followers_following_count': '{followers} followers • {following} following',
+      'followers_following_count':
+          '{followers} followers • {following} following',
       'continue_as_guest': 'Continue as guest',
       'user_made_new_post': '{name} made a new post.',
       'feed_no_posts': 'We couldn\'t load any posts',
     },
   };
 
-  static String text(BuildContext context, String key, [Map<String, String>? args]) {
+  static String text(
+    BuildContext context,
+    String key, [
+    Map<String, String>? args,
+  ]) {
     final locale = LocaleProviderScope.of(context).locale;
     final languageCode = locale.languageCode;
-    final raw = _localizedValues[languageCode]?[key] ?? _localizedValues['es']![key] ?? key;
+    final raw =
+        _localizedValues[languageCode]?[key] ??
+        _localizedValues['es']![key] ??
+        key;
     if (args == null || args.isEmpty) {
       return raw;
     }
@@ -397,6 +437,8 @@ class Translations {
 
   static String currentLanguageLabel(BuildContext context) {
     final languageCode = LocaleProviderScope.of(context).locale.languageCode;
-    return languageCode == 'en' ? text(context, 'english') : text(context, 'spanish');
+    return languageCode == 'en'
+        ? text(context, 'english')
+        : text(context, 'spanish');
   }
 }
