@@ -218,6 +218,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             'new_follower_message',
             {'follower': myName},
           ),
+          'reference_id': currentUser.id,
           'is_read': false,
           'created_at': DateTime.now().toUtc().toIso8601String(),
         });

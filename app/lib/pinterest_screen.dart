@@ -316,6 +316,7 @@ class PinterestScreenState extends State<PinterestScreen> {
           'type': 'post',
           'title': 'Nueva publicación',
           'message': '$actorName publicó una nueva publicación.',
+          'reference_id': pinId.toString(),
           'is_read': false,
           'created_at': DateTime.now().toUtc().toIso8601String(),
         };
