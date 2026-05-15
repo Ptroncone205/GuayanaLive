@@ -96,125 +96,84 @@ class _AuthModalState extends State<AuthModal> {
   }
 
   Future<void> _register() async {
-  final email = _regEmailController.text.trim();
-  final username = _regUsernameController.text.trim();
-  final password = _regPasswordController.text.trim();
-  final confirmPassword = _regConfirmPasswordController.text.trim();
+    final email = _regEmailController.text.trim();
+    final username = _regUsernameController.text.trim();
+    final password = _regPasswordController.text.trim();
+    final confirmPassword = _regConfirmPasswordController.text.trim();
 
-  if (email.isEmpty ||
-      username.isEmpty ||
-      password.isEmpty ||
-      confirmPassword.isEmpty) {
-    _showError(Translations.text(context, 'fill_all_fields'));
-    return;
-  }
-
-  if (password != confirmPassword) {
-    _showError(Translations.text(context, 'passwords_dont_match'));
-    return;
-  }
-
-  if (password.length < 6) {
-    _showError(Translations.text(context, 'password_length_error'));
-    return;
-  }
-
-  setState(() => _isLoading = true);
-
-  try {
-    // CHECK USERNAME
-    final existingUser = await _supabase
-        .from('profiles')
-        .select('id')
-        .eq('username', username)
-        .maybeSingle();
-
-    if (existingUser != null) {
-      throw Exception(
-        Translations.text(context, 'username_in_use'),
-      );
+    if (email.isEmpty || username.isEmpty || password.isEmpty || confirmPassword.isEmpty) {
+      _showError(Translations.text(context, 'fill_all_fields'));
+      return;
     }
 
-    // TRY SIGNUP
-    final response = await _supabase.auth.signUp(
-      email: email,
-      password: password,
-      data: {
-        'username': username,
-      },
-      emailRedirectTo:
-          'https://YOURPROJECT.workers.dev',
-    );
+    if (password != confirmPassword) {
+      _showError(Translations.text(context, 'passwords_dont_match'));
+      return;
+    }
 
-    // SUCCESS
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            Translations.text(
-              context,
-              'registration_success',
-            ),
+    if (password.length < 6) {
+      _showError(Translations.text(context, 'password_length_error'));
+      return;
+    }
+
+    setState(() => _isLoading = true);
+
+    try {
+      final existingUser = await _supabase
+          .from('profiles')
+          .select('id')
+          .eq('username', username)
+          .maybeSingle();
+
+      if (existingUser != null) {
+        throw Exception(Translations.text(context, 'username_in_use'));
+      }
+
+      // 1. Perform the sign up
+      await _supabase.auth.signUp(
+        email: email,
+        password: password,
+        data: {'username': username}, 
+      );
+      
+      // 2. Show the success message
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(Translations.text(context, 'registration_success')),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 5), // Give them time to read it
           ),
-          backgroundColor: Colors.green,
-          duration: const Duration(seconds: 5),
-        ),
-      );
-    }
-
-    // SWITCH TO LOGIN
-    if (mounted) {
-      setState(() {
-        _isLogin = true;
-      });
-
-      _regEmailController.clear();
-      _regUsernameController.clear();
-      _regPasswordController.clear();
-      _regConfirmPasswordController.clear();
-    }
-  } on AuthException catch (error) {
-    final msg = error.message.toLowerCase();
-
-    // EMAIL EXISTS BUT NOT VERIFIED
-    if (msg.contains('already registered') ||
-        msg.contains('user already registered')) {
-      try {
-        await _supabase.auth.resend(
-          type: OtpType.signup,
-          email: email,
-          emailRedirectTo:
-              'https://YOURPROJECT.workers.dev',
-        );
-
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text(
-                'Verification email resent.',
-              ),
-              backgroundColor: Colors.orange,
-            ),
-          );
-        }
-      } catch (e) {
-        _showError(
-          'Account exists. Please login.',
         );
       }
-    } else {
-      _showError(error.message);
-    }
-  } catch (e) {
-    _showError(
-      e.toString().replaceAll('Exception: ', ''),
-    );
-  } finally {
-    if (mounted) {
-      setState(() => _isLoading = false);
+
+      // 3. Handle UI navigation
+      if (mounted) {
+        if (widget.isBottomSheet) {
+          // If it's the modal from inside the app, close it
+          Navigator.of(context).pop();
+        } else {
+          // If it's the LoginScreen version, switch back to Login mode 
+          // so they don't try to register again immediately
+          setState(() {
+            _isLogin = true;
+            _isLoading = false;
+          });
+          // Clear registration fields
+          _regEmailController.clear();
+          _regUsernameController.clear();
+          _regPasswordController.clear();
+          _regConfirmPasswordController.clear();
+        }
+      }
+    } on AuthException catch (error) {
+      _showError('Error: ${error.message}');
+    } catch (e) {
+      _showError(e.toString().replaceAll('Exception: ', ''));
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
   }
-}
 
   Widget _buildLoginFields() {
     return Column(
