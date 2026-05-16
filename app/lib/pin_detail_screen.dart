@@ -625,7 +625,7 @@ Widget _buildDetailsAndComments({required bool isDesktop}) {
                 scrollDirection: Axis.horizontal,
                 physics: const BouncingScrollPhysics(),
                 itemCount: pinTags.length,
-                separatorBuilder: (_, __) => const SizedBox(width: 6),
+                separatorBuilder: (_, _) => const SizedBox(width: 6),
                 itemBuilder: (context, index) {
                   final tag = pinTags[index];
 

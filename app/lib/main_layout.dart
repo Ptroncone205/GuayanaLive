@@ -120,7 +120,6 @@ class _MainLayoutState extends State<MainLayout> {
     if (index == 0) {
       pinterestKey.currentState?.fetchPins();
     }
-    ;
 
     if ((index == 4 || index == 2) && isGuest) {
       showAuthModal(context);

@@ -133,7 +133,8 @@ class _AuthModalState extends State<AuthModal> {
       await _supabase.auth.signUp(
         email: email,
         password: password,
-        data: {'username': username}, 
+        data: {'username': username},
+        emailRedirectTo: 'https://guayanalive.danbecd.workers.dev' 
       );
       
       // 2. Show the success message

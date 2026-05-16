@@ -1,6 +1,6 @@
+import 'package:app/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -31,7 +31,6 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const Color appleGreen = Color(0xFF9ACF7C);
     final localeProvider = LocaleProviderScope.of(context);
 
     return MaterialApp(
@@ -44,16 +43,7 @@ class MyApp extends StatelessWidget {
         GlobalWidgetsLocalizations.delegate,
         GlobalCupertinoLocalizations.delegate,
       ],
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: appleGreen),
-        useMaterial3: true,
-        primaryColor: appleGreen,
-        appBarTheme: const AppBarTheme(
-          backgroundColor: appleGreen,
-          foregroundColor: Colors.white,
-          iconTheme: IconThemeData(color: Colors.white),
-        ),
-      ),
+      theme: AppTheme().lightTheme,
       home: const AuthGate(),
     );
   }

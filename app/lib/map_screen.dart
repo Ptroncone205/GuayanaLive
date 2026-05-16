@@ -26,8 +26,8 @@ class MapScreen extends StatefulWidget {
 }
 
 class _MapScreenState extends State<MapScreen> {
-  Set<Marker> _markers = {};
-  Set<Circle> _heatmapCircles = {};
+  final Set<Marker> _markers = {};
+  final Set<Circle> _heatmapCircles = {};
   bool _isLoading = true;
   bool _showHeatmap = true;
 
@@ -48,11 +48,6 @@ class _MapScreenState extends State<MapScreen> {
           .not('latitude', 'is', null)
           .not('longitude', 'is', null)
           .order('created_at', ascending: false);
-
-      if (response == null) {
-        if (mounted) setState(() => _isLoading = false);
-        return;
-      }
 
       final List<dynamic> pinsData = response as List<dynamic>;
 
@@ -119,7 +114,7 @@ class _MapScreenState extends State<MapScreen> {
 
         newMarkers.add(
           Marker(
-            markerId: MarkerId('cluster_${lat}_${lng}'),
+            markerId: MarkerId('cluster_${lat}_$lng'),
             position: LatLng(lat, lng),
             infoWindow: InfoWindow(
               title: isMultiple
@@ -134,7 +129,7 @@ class _MapScreenState extends State<MapScreen> {
 
         newCircles.add(
           Circle(
-            circleId: CircleId('heat_${lat}_${lng}'),
+            circleId: CircleId('heat_${lat}_$lng'),
             center: LatLng(lat, lng),
             radius: 15000,
             fillColor: Colors.red.withOpacity(0.15),
@@ -240,7 +235,7 @@ class _MapScreenState extends State<MapScreen> {
                                   Image.network(
                                     pin['image_url'] ?? '',
                                     fit: BoxFit.cover,
-                                    errorBuilder: (_, __, ___) =>
+                                    errorBuilder: (_, _, _) =>
                                         Container(color: Colors.grey[200]),
                                   ),
                                   Positioned(
@@ -289,7 +284,7 @@ class _MapScreenState extends State<MapScreen> {
               Text(Translations.text(context, 'heat_zones'), style: const TextStyle(fontSize: 12)),
               Switch(
                 value: _showHeatmap,
-                activeColor: Colors.redAccent,
+                activeThumbColor: Colors.redAccent,
                 onChanged: (val) {
                   setState(() => _showHeatmap = val);
                 },

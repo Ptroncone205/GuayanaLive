@@ -23,7 +23,7 @@ class LocaleProvider extends ChangeNotifier {
 }
 
 class LocaleProviderScope extends InheritedNotifier<LocaleProvider> {
-  const LocaleProviderScope({required LocaleProvider notifier, required super.child}) : super(notifier: notifier);
+  const LocaleProviderScope({super.key, required LocaleProvider notifier, required super.child}) : super(notifier: notifier);
 
   static LocaleProvider of(BuildContext context) {
     final scope = context.dependOnInheritedWidgetOfExactType<LocaleProviderScope>();

@@ -387,7 +387,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
       setState(() => _avatarUrl = newAvatarUrl);
     } catch (e) {
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
@@ -397,6 +397,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
           ),
         );
+      }
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -430,7 +431,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         );
       }
     } catch (e) {
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
@@ -440,6 +441,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
           ),
         );
+      }
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -962,8 +964,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                       fit: BoxFit.cover,
                                       loadingBuilder:
                                           (context, child, loadingProgress) {
-                                            if (loadingProgress == null)
+                                            if (loadingProgress == null) {
                                               return child;
+                                            }
 
                                             return Container(
                                               color: Colors.grey.shade200,

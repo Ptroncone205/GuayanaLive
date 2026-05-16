@@ -329,8 +329,9 @@ class PinterestScreenState extends State<PinterestScreen> {
   }
 
   Future<Map<String, double>?> _extractLocation(XFile image) async {
-    if (kIsWeb)
+    if (kIsWeb) {
       return null; // EXIF and Geolocator might need specific web handling or be skipped
+    }
     try {
       final bytes = await image.readAsBytes();
       final data = await readExifFromBytes(bytes);
@@ -1067,8 +1068,9 @@ class PinterestScreenState extends State<PinterestScreen> {
                                                     child,
                                                     loadingProgress,
                                                   ) {
-                                                    if (loadingProgress == null)
+                                                    if (loadingProgress == null) {
                                                       return child;
+                                                    }
                                                     return Container(
                                                       color:
                                                           Colors.grey.shade200,
